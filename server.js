@@ -446,7 +446,7 @@ async function handleXtreamPlayback(req, res, type) {
 let offlineSequence = Math.floor(Date.now() / 2000);
 
 async function isLiveSourceAvailable(stream) {
-  if (!/^https?:\\/\\//i.test(String(stream || ""))) return false;
+  if (!/^https?:\/\//i.test(String(stream || ""))) return false;
   try {
     const head = await fetch(stream, { method: "HEAD", redirect: "follow", signal: AbortSignal.timeout(5000) });
     if (head.ok) return true;
@@ -471,7 +471,7 @@ app.get("/live/:username/:password/:id.m3u8", requireDatabase, async (req, res) 
   try {
     const user = await findXtreamUser(req.params.username, req.params.password);
     if (!user) return res.status(401).send("Invalid username or password");
-    if (!/^\\d+$/.test(req.params.id)) return res.status(400).send("Invalid stream id");
+    if (!/^\d+$/.test(req.params.id)) return res.status(400).send("Invalid stream id");
     const result = await pool.query("SELECT stream FROM content WHERE id = $1 AND type = 'live'", [req.params.id]);
     const stream = result.rows[0]?.stream;
     if (!stream) return res.status(404).send("Live channel not found");
