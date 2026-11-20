@@ -15,6 +15,10 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
+app.get("/admin", (_req, res) => {
+  res.sendFile(path.join(__dirname, "public", "admin.html"));
+});
+
 app.get("/api", (_req, res) => {
   res.json({
     name: "CASS TV API",
