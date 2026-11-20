@@ -140,6 +140,7 @@ function showMessage(message) {
 
 keyInput.addEventListener("change", () => {
   sessionStorage.setItem(KEY_STORAGE, keyInput.value.trim());
+  renderRequests();
 });
 
 form.addEventListener("submit", async event => {
@@ -167,6 +168,9 @@ form.addEventListener("submit", async event => {
   }
 });
 
-document.getElementById("clearAll").addEventListener("click", render);\ndocument.getElementById("refreshRequests")?.addEventListener("click", renderRequests);
+document.getElementById("clearAll").addEventListener("click", render);
+document.getElementById("refreshRequests")?.addEventListener("click", renderRequests);
+document.getElementById("refreshRequests")?.addEventListener("click", renderRequests);
 
 render();
+renderRequests();
