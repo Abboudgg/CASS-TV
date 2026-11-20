@@ -33,14 +33,14 @@
     <section class="stats">
       <article><span>إجمالي المحتوى</span><strong id="totalCount">0</strong><small>عنصر محفوظ في قاعدة البيانات</small></article>
       <article><span>الأفلام</span><strong id="movieCount">0</strong><small>في قاعدة البيانات</small></article>
-      <article><span>المسلسلات</span><strong id="seriesCount">0</strong><small>في المكتبة التجريبية</small></article>
+      <article><span>المسلسلات</span><strong id="seriesCount">0</strong><small>في المكتبة التجريبية</small></article><article><span>البث المباشر</span><strong id="liveCount">0</strong><small>قناة في قائمة التشغيل</small></article>
     </section>
 
     <section class="panel" id="add">
       <div class="panel-head"><div><span class="tag">CONTENT MANAGER</span><h2>إضافة محتوى</h2></div></div>
       <div class="key-row"><label for="adminKey">مفتاح الإدارة (ADMIN_API_KEY)</label><input id="adminKey" type="password" autocomplete="off" placeholder="أدخل مفتاح الإدارة الذي ستضبطه في الاستضافة"></div><form id="contentForm">
         <div class="form-grid">
-          <label>نوع المحتوى<select id="type"><option value="movie">فيلم</option><option value="series">مسلسل</option></select></label>
+          <label>نوع المحتوى<select id="type"><option value="movie">فيلم</option><option value="series">مسلسل</option><option value="live">بث مباشر</option></select></label>
           <label>اسم المحتوى<input id="title" required maxlength="100" placeholder="اكتب اسم الفيلم أو المسلسل"></label>
           <label class="wide">رابط صورة الغلاف<input id="poster" type="url" placeholder="https://example.com/poster.jpg"></label>
           <label class="wide">رابط الفيديو أو المصدر<input id="stream" type="url" placeholder="https://example.com/video.m3u8"></label>
