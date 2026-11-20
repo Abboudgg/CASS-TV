@@ -16,7 +16,7 @@
     <a class="side-link" href="#library">▤ مكتبة المحتوى</a>
     <a class="side-link" href="/#live">◉ البث المباشر</a>
     <a class="side-link" href="/">↗ عرض الموقع</a>
-    <div class="side-note">نسخة تجريبية<br><span>لوحة الإدارة قيد التطوير</span></div>
+    <div class="side-note">إدارة المحتوى<br><span>احفظ مفتاح الإدارة بأمان</span></div>
   </aside>
 
   <main class="main">
@@ -31,14 +31,14 @@
     </section>
 
     <section class="stats">
-      <article><span>إجمالي المحتوى</span><strong id="totalCount">0</strong><small>عنصر محفوظ في هذا المتصفح</small></article>
-      <article><span>الأفلام</span><strong id="movieCount">0</strong><small>في المكتبة التجريبية</small></article>
+      <article><span>إجمالي المحتوى</span><strong id="totalCount">0</strong><small>عنصر محفوظ في قاعدة البيانات</small></article>
+      <article><span>الأفلام</span><strong id="movieCount">0</strong><small>في قاعدة البيانات</small></article>
       <article><span>المسلسلات</span><strong id="seriesCount">0</strong><small>في المكتبة التجريبية</small></article>
     </section>
 
     <section class="panel" id="add">
       <div class="panel-head"><div><span class="tag">CONTENT MANAGER</span><h2>إضافة محتوى</h2></div></div>
-      <form id="contentForm">
+      <div class="key-row"><label for="adminKey">مفتاح الإدارة (ADMIN_API_KEY)</label><input id="adminKey" type="password" autocomplete="off" placeholder="أدخل مفتاح الإدارة الذي ستضبطه في الاستضافة"></div><form id="contentForm">
         <div class="form-grid">
           <label>نوع المحتوى<select id="type"><option value="movie">فيلم</option><option value="series">مسلسل</option></select></label>
           <label>اسم المحتوى<input id="title" required maxlength="100" placeholder="اكتب اسم الفيلم أو المسلسل"></label>
@@ -46,8 +46,8 @@
           <label class="wide">رابط الفيديو أو المصدر<input id="stream" type="url" placeholder="https://example.com/video.m3u8"></label>
           <label class="wide">وصف المحتوى<textarea id="description" rows="3" maxlength="500" placeholder="نبذة قصيرة عن المحتوى"></textarea></label>
         </div>
-        <p class="hint">ملاحظة: هذه نسخة أولية؛ البيانات تحفظ في هذا المتصفح فقط، وليست في قاعدة بيانات أو متاحة لبقية الزوار.</p>
-        <button type="submit">＋ حفظ المحتوى التجريبي</button>
+        <p class="hint">تُحفظ البيانات في قاعدة البيانات وتظهر للزوار. يلزم ربط DATABASE_URL وضبط ADMIN_API_KEY في إعدادات الاستضافة أولاً.</p>
+        <button type="submit">＋ حفظ المحتوى</button>
         <p id="formMessage" role="status"></p>
       </form>
     </section>
