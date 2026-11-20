@@ -510,7 +510,7 @@ app.get("/live/:username/:password/:id.m3u8", requireDatabase, async (req, res) 
     if (!playlist.trimStart().startsWith("#EXTM3U")) {
       return res.status(502).send("Invalid upstream HLS playlist");
     }
-    const rewritten = rewriteLivePlaylist(playlist, stream, req, req.params.username, req.params.password, req.params.id);
+    const rewritten = rewriteLivePlaylist(playlist, upstream.url || stream, req, req.params.username, req.params.password, req.params.id);
     return res.status(200).type("application/vnd.apple.mpegurl")
       .set("Cache-Control", "no-store, no-cache, must-revalidate")
       .send(rewritten);
@@ -522,6 +522,7 @@ app.get("/live/:username/:password/:id.m3u8", requireDatabase, async (req, res) 
 });
 
 app.get("/live-resource/:username/:password/:id", requireDatabase, async (req, res) => {
+  let playlistTarget = false;
   try {
     const user = await findXtreamUser(req.params.username, req.params.password);
     if (!user) return res.status(401).send("Invalid username or password");
@@ -529,6 +530,7 @@ app.get("/live-resource/:username/:password/:id", requireDatabase, async (req, r
     const result = await pool.query("SELECT stream FROM content WHERE id = $1 AND type = 'live'", [req.params.id]);
     const stream = result.rows[0]?.stream;
     const target = new URL(String(req.query.target || ""));
+    playlistTarget = /\.m3u8(?:$|\?)/i.test(target.href);
     const source = new URL(String(stream || ""));
     if (!["http:", "https:"].includes(target.protocol) || target.origin !== source.origin) {
       return res.status(403).send("Invalid live resource URL");
@@ -536,13 +538,16 @@ app.get("/live-resource/:username/:password/:id", requireDatabase, async (req, r
     const headers = {};
     if (req.get("range")) headers.Range = req.get("range");
     const upstream = await fetch(target.href, { headers, redirect: "follow", signal: AbortSignal.timeout(15000) });
-    if (!upstream.ok) return res.status(upstream.status).send("Live resource unavailable");
+    if (!upstream.ok) {
+      if (playlistTarget) return res.status(200).type("application/vnd.apple.mpegurl").set("Cache-Control", "no-store").send(makeOfflinePlaylist(req));
+      return res.status(upstream.status).send("Live resource unavailable");
+    }
     const contentType = upstream.headers.get("content-type") || "";
-    if (contentType.toLowerCase().includes("mpegurl") || /\.m3u8(?:$|\?)/i.test(target.pathname)) {
+    if (contentType.toLowerCase().includes("mpegurl") || playlistTarget) {
       const playlist = await upstream.text();
       return res.status(200).type("application/vnd.apple.mpegurl")
         .set("Cache-Control", "no-store")
-        .send(rewriteLivePlaylist(playlist, target.href, req, req.params.username, req.params.password, req.params.id));
+        .send(rewriteLivePlaylist(playlist, upstream.url || target.href, req, req.params.username, req.params.password, req.params.id));
     }
     const bytes = Buffer.from(await upstream.arrayBuffer());
     res.status(upstream.status)
@@ -550,6 +555,7 @@ app.get("/live-resource/:username/:password/:id", requireDatabase, async (req, r
       .set("Cache-Control", "no-store")
       .send(bytes);
   } catch (_error) {
+    if (playlistTarget) return res.status(200).type("application/vnd.apple.mpegurl").set("Cache-Control", "no-store").send(makeOfflinePlaylist(req));
     res.status(502).send("Live resource proxy failed");
   }
 });
