@@ -14,6 +14,11 @@
     .status{font-size:14px;color:#c7c3d2;background:#211f2b;border:1px solid #393447;border-radius:30px;padding:8px 13px}
     .screen{position:relative;aspect-ratio:16/9;background:#050508;border:1px solid #302b3c;border-radius:16px;overflow:hidden;box-shadow:0 18px 60px #0008}
     #twitch-embed,iframe{width:100%;height:100%;border:0}
+    .offline-screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px;text-align:center;background:radial-gradient(ellipse at center,#24202d 0%,#09090d 72%);color:#fff}
+    .offline-screen[hidden]{display:none}
+    .offline-icon{font-size:clamp(38px,8vw,72px);line-height:1;color:#ff7777}
+    .offline-title{font-size:clamp(20px,4vw,32px);font-weight:800}
+    .offline-subtitle{font-size:14px;color:#b9b4c5}
     .message{margin-top:14px;text-align:center;color:#b9b4c5;font-size:14px}
     a{color:#b98aff}
   </style>
@@ -21,19 +26,21 @@
 <body>
 <main>
   <header><div class="brand">CASS <b>TV</b> · بث كاس</div><div class="status" id="status">جاري تحميل البث…</div></header>
-  <div class="screen"><div id="twitch-embed"></div></div>
+  <div class="screen"><div id="twitch-embed"></div><div class="offline-screen" id="offline-screen"><div class="offline-icon">◉</div><div class="offline-title">إشارة منقطعة</div><div class="offline-subtitle">البث مسكر حالياً</div></div></div>
   <div class="message" id="message">قناة r119_abdlull على Twitch</div>
 </main>
 <script src="https://embed.twitch.tv/embed/v1.js"></script>
 <script>
   const statusEl = document.getElementById("status");
   const messageEl = document.getElementById("message");
+  const offlineScreen = document.getElementById("offline-screen");
   let gotStatus = false;
   function setOnline(online) {
     gotStatus = true;
     statusEl.textContent = online ? "● البث مباشر" : "إشارة منقطعة · البث مسكر";
     statusEl.style.color = online ? "#8ee6a5" : "#ff9a9a";
-    messageEl.textContent = online ? "أنت تشاهد بث كاس مباشرة الآن" : "القناة غير متصلة حالياً. حاول المشاهدة لاحقاً.";
+    messageEl.textContent = online ? "أنت تشاهد بث كاس مباشرة الآن" : "القناة غير متصلة حالياً.";
+    offlineScreen.hidden = online;
   }
   if (window.Twitch && window.Twitch.Embed) {
     const embed = new Twitch.Embed("twitch-embed", {
@@ -52,11 +59,11 @@
     embed.addEventListener(Twitch.Embed.ONLINE, () => setOnline(true));
     setTimeout(() => {
       if (!gotStatus) {
-        statusEl.textContent = "حالة البث غير متاحة";
-        messageEl.textContent = "قد تحتاج القناة إلى فتحها مباشرة على Twitch للتحقق من حالة البث.";
+        setOnline(false);
       }
     }, 12000);
   } else {
+    setOnline(false);
     statusEl.textContent = "تعذر تحميل مشغّل Twitch";
     messageEl.textContent = "تحقق من اتصال الإنترنت ثم أعد تحميل الصفحة.";
   }
