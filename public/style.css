@@ -63,3 +63,5 @@ footer { display: flex; justify-content: space-between; padding: 25px 10%; color
   .empty-grid { grid-template-columns: 1fr; }
   footer { padding: 22px 7%; gap: 12px; flex-wrap: wrap; }
 }
+
+.header-actions{display:flex;align-items:center;gap:10px}.register-link{padding:10px 14px;border-radius:10px;background:#8b5cf6;color:white;font-size:13px;font-weight:700}@media(max-width:720px){.header-actions{margin-right:auto}}
