@@ -43,10 +43,10 @@
           <label>نوع المحتوى<select id="type"><option value="movie">فيلم</option><option value="series">مسلسل</option><option value="live">بث مباشر</option></select></label>
           <label>اسم المحتوى<input id="title" required maxlength="100" placeholder="اكتب اسم الفيلم أو المسلسل"></label>
           <label class="wide">رابط صورة الغلاف<input id="poster" type="url" placeholder="https://example.com/poster.jpg"></label>
-          <label class="wide">رابط الفيديو أو المصدر<input id="stream" type="url" placeholder="https://example.com/video.m3u8"></label>
+          <label class="wide">رابط البث أو الفيديو<input id="stream" type="url" placeholder="https://example.com/live/stream.m3u8"></label>
           <label class="wide">وصف المحتوى<textarea id="description" rows="3" maxlength="500" placeholder="نبذة قصيرة عن المحتوى"></textarea></label>
         </div>
-        <p class="hint">تُحفظ البيانات في قاعدة البيانات وتظهر للزوار. يلزم ربط DATABASE_URL وضبط ADMIN_API_KEY في إعدادات الاستضافة أولاً.</p>
+        <p class="hint">تُحفظ البيانات في قاعدة البيانات. للبث المباشر اختر «بث مباشر» وأدخل رابط HLS بصيغة M3U8؛ إذا توقف المصدر تظهر شاشة انتظار داخل القناة.</p>
         <button type="submit">＋ حفظ المحتوى</button>
         <p id="formMessage" role="status"></p>
       </form>
