@@ -465,12 +465,19 @@ function makeOfflinePlaylist(req) {
   ].join("\n");
 }
 
+const liveAllowedOrigins = new Map();
+
 function rewriteLivePlaylist(playlist, sourceUrl, req, username, password, id) {
+  const originKey = String(username) + ":" + String(id);
+  const allowedOrigins = new Set(liveAllowedOrigins.get(originKey) || []);
+  try { allowedOrigins.add(new URL(sourceUrl).origin); } catch (_error) {}
   const base = publicBaseUrl(req);
   const proxyTarget = target => {
     try {
       const resolved = new URL(target, sourceUrl);
       if (!["http:", "https:"].includes(resolved.protocol)) return target;
+      allowedOrigins.add(resolved.origin);
+      liveAllowedOrigins.set(originKey, allowedOrigins);
       return base + "/live-resource/" + encodeURIComponent(username) + "/" +
         encodeURIComponent(password) + "/" + id + "?target=" + encodeURIComponent(resolved.href);
     } catch (_error) {
@@ -535,7 +542,8 @@ app.get("/live-resource/:username/:password/:id", requireDatabase, async (req, r
     const target = new URL(String(req.query.target || ""));
     playlistTarget = /\.m3u8(?:$|\?)/i.test(target.href);
     const source = new URL(String(stream || ""));
-    if (!["http:", "https:"].includes(target.protocol) || target.origin !== source.origin) {
+    const allowedOrigins = liveAllowedOrigins.get(String(req.params.username) + ":" + String(req.params.id)) || new Set([source.origin]);
+    if (!["http:", "https:"].includes(target.protocol) || !allowedOrigins.has(target.origin)) {
       return res.status(403).send("Invalid live resource URL");
     }
     const headers = {};
