@@ -135,6 +135,9 @@ app.post("/api/content", requireDatabase, requireAdmin, async (req, res) => {
   if (!["movie", "series", "live"].includes(type) || typeof title !== "string" || !title.trim()) {
     return res.status(400).json({ error: "نوع المحتوى والاسم مطلوبان." });
   }
+  if (type === "live" && (typeof stream !== "string" || !stream.trim())) {
+    return res.status(400).json({ error: "رابط البث المباشر مطلوب." });
+  }
   if (stream && !/^https?:\/\//i.test(String(stream))) {
     return res.status(400).json({ error: "رابط التشغيل يجب أن يبدأ بـ http:// أو https://." });
   }
