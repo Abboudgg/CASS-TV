@@ -93,8 +93,6 @@ form.addEventListener("submit", async event => {
   }
 });
 
-document.getElementById("clearAll").addEventListener("click", () => {
-  showMessage("لحذف المحتوى، استخدم زر حذف بجانب كل عنصر.");
-});
+document.getElementById("clearAll").addEventListener("click", render);
 
 render();
