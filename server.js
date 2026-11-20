@@ -1,5 +1,6 @@
 const express = require("express");
 const path = require("path");
+const fs = require("fs");
 const { Pool } = require("pg");
 const crypto = require("crypto");
 
@@ -519,6 +520,18 @@ async function start() {
       await pool.query(
         "CREATE TABLE IF NOT EXISTS xtream_registration_requests (id BIGSERIAL PRIMARY KEY, username VARCHAR(32) NOT NULL UNIQUE, password_salt VARCHAR(64) NOT NULL, password_hash VARCHAR(128) NOT NULL, status VARCHAR(12) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')), created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"
       );
+      try {
+        const encodedWaitAsset = path.join(__dirname, "public", "offline", "wait.ts.b64");
+        const waitAsset = path.join(__dirname, "public", "offline", "wait.ts");
+        if (fs.existsSync(encodedWaitAsset)) {
+          const bytes = Buffer.from(fs.readFileSync(encodedWaitAsset, "utf8").trim(), "base64");
+          if (bytes[0] !== 0x47) throw new Error("Offline waiting media is not a valid MPEG-TS file.");
+          fs.mkdirSync(path.dirname(waitAsset), { recursive: true });
+          fs.writeFileSync(waitAsset, bytes);
+        }
+      } catch (assetError) {
+        console.error("Offline waiting screen asset failed:", assetError.message);
+      }
       console.log("CASS TV database is ready");
       console.log("CASS TV Xtream Codes API is ready");
     } catch (error) {
