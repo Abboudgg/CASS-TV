@@ -161,6 +161,85 @@ app.delete("/api/content/:id", requireDatabase, requireAdmin, async (req, res) =
   }
 });
 
+
+app.post("/api/register", requireDatabase, async (req, res) => {
+  const { username, password } = req.body || {};
+  if (typeof username !== "string" || !/^[a-zA-Z0-9_.-]{3,32}$/.test(username))
+    return res.status(400).json({ error: "اسم المستخدم يجب أن يكون 3 إلى 32 حرفًا إنجليزيًا أو رقمًا." });
+  if (typeof password !== "string" || password.length < 8 || password.length > 128)
+    return res.status(400).json({ error: "كلمة المرور يجب أن تكون بين 8 و128 حرفًا." });
+  try {
+    const existing = await pool.query(
+      "SELECT 1 FROM xtream_users WHERE username = $1 UNION ALL SELECT 1 FROM xtream_registration_requests WHERE username = $1 AND status = 'pending' LIMIT 1",
+      [username]
+    );
+    if (existing.rowCount) return res.status(409).json({ error: "اسم المستخدم مستخدم أو لديه طلب قيد المراجعة." });
+    const { salt, hash } = await hashPassword(password);
+    await pool.query(
+      "INSERT INTO xtream_registration_requests (username, password_salt, password_hash) VALUES ($1, $2, $3)",
+      [username, salt, hash]
+    );
+    res.status(201).json({ success: true, status: "pending", message: "تم استلام طلبك. انتظر موافقة المدير." });
+  } catch (error) {
+    if (error.code === "23505") return res.status(409).json({ error: "يوجد طلب بهذا الاسم بالفعل." });
+    console.error("Registration request failed:", error.message);
+    res.status(500).json({ error: "تعذر إرسال طلب التسجيل." });
+  }
+});
+
+app.get("/api/xtream/requests", requireDatabase, requireAdmin, async (_req, res) => {
+  try {
+    const result = await pool.query("SELECT id, username, created_at FROM xtream_registration_requests WHERE status = 'pending' ORDER BY created_at ASC");
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Registration requests read failed:", error.message);
+    res.status(500).json({ error: "تعذر تحميل الطلبات." });
+  }
+});
+
+app.post("/api/xtream/requests/:id/approve", requireDatabase, requireAdmin, async (req, res) => {
+  if (!/^\\d+$/.test(req.params.id)) return res.status(400).json({ error: "معرّف الطلب غير صالح." });
+  const duration = Number(req.body?.duration_days);
+  if (![0, 7, 30, 90, 180].includes(duration)) return res.status(400).json({ error: "مدة الاشتراك غير صحيحة." });
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const found = await client.query("SELECT id, username, password_salt, password_hash FROM xtream_registration_requests WHERE id = $1 AND status = 'pending' FOR UPDATE", [req.params.id]);
+    if (!found.rowCount) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "الطلب غير موجود أو تمت معالجته." });
+    }
+    const request = found.rows[0];
+    const expiry = duration === 0 ? null : new Date(Date.now() + duration * 86400000);
+    const created = await client.query(
+      "INSERT INTO xtream_users (username, password_salt, password_hash, expires_at) VALUES ($1, $2, $3, $4) RETURNING id, username, expires_at",
+      [request.username, request.password_salt, request.password_hash, expiry]
+    );
+    await client.query("UPDATE xtream_registration_requests SET status = 'approved' WHERE id = $1", [req.params.id]);
+    await client.query("COMMIT");
+    res.json({ success: true, user: created.rows[0] });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    if (error.code === "23505") return res.status(409).json({ error: "اسم المستخدم موجود بالفعل." });
+    console.error("Registration approval failed:", error.message);
+    res.status(500).json({ error: "تعذرت الموافقة على الطلب." });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/api/xtream/requests/:id/reject", requireDatabase, requireAdmin, async (req, res) => {
+  if (!/^\\d+$/.test(req.params.id)) return res.status(400).json({ error: "معرّف الطلب غير صالح." });
+  try {
+    const result = await pool.query("UPDATE xtream_registration_requests SET status = 'rejected' WHERE id = $1 AND status = 'pending' RETURNING id", [req.params.id]);
+    if (!result.rowCount) return res.status(404).json({ error: "الطلب غير موجود أو تمت معالجته." });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Registration rejection failed:", error.message);
+    res.status(500).json({ error: "تعذر رفض الطلب." });
+  }
+});
+
 app.get("/api/xtream/users", requireDatabase, requireAdmin, async (_req, res) => {
   try {
     const result = await pool.query(
@@ -341,6 +420,9 @@ async function start() {
       );
       await pool.query(
         "CREATE TABLE IF NOT EXISTS xtream_users (id BIGSERIAL PRIMARY KEY, username VARCHAR(32) NOT NULL UNIQUE, password_salt VARCHAR(64) NOT NULL, password_hash VARCHAR(128) NOT NULL, is_active BOOLEAN NOT NULL DEFAULT TRUE, expires_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"
+      );
+      await pool.query(
+        "CREATE TABLE IF NOT EXISTS xtream_registration_requests (id BIGSERIAL PRIMARY KEY, username VARCHAR(32) NOT NULL UNIQUE, password_salt VARCHAR(64) NOT NULL, password_hash VARCHAR(128) NOT NULL, status VARCHAR(12) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')), created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"
       );
       console.log("CASS TV database is ready");
       console.log("CASS TV Xtream Codes API is ready");
