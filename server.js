@@ -571,6 +571,109 @@ app.get("/live-resource/:username/:password/:id", requireDatabase, async (req, r
   }
 });
 
+
+const TWITCH2_SOURCE = "https://live-jzc6.onrender.com/live/twitch/index.m3u8";
+const TWITCH2_HOST = new URL(TWITCH2_SOURCE).hostname;
+
+function makeTwitch2OfflinePlaylist(req) {
+  const base = publicBaseUrl(req);
+  const sequence = Math.floor(Date.now() / 1000);
+  return [
+    "#EXTM3U",
+    "#EXT-X-VERSION:3",
+    "#EXT-X-TARGETDURATION:1",
+    "#EXT-X-MEDIA-SEQUENCE:" + sequence,
+    "#EXTINF:1.0,",
+    base + "/offline/wait.ts?seq=" + sequence,
+    "#EXTINF:1.0,",
+    base + "/offline/wait.ts?seq=" + (sequence + 1),
+    "#EXTINF:1.0,",
+    base + "/offline/wait.ts?seq=" + (sequence + 2)
+  ].join("\n");
+}
+
+function rewriteTwitch2Playlist(playlist, sourceUrl, req) {
+  const base = publicBaseUrl(req);
+  const proxy = value => {
+    try {
+      const target = new URL(value, sourceUrl);
+      if (!["http:", "https:"].includes(target.protocol) || target.hostname !== TWITCH2_HOST) return value;
+      return base + "/twitch2-resource?target=" + encodeURIComponent(target.href);
+    } catch (_error) {
+      return value;
+    }
+  };
+  return playlist.split(/\r?\n/).map(line => {
+    const trimmed = line.trim();
+    if (!trimmed) return line;
+    if (trimmed.startsWith("#")) {
+      return line.replace(/URI="([^"]+)"/g, (_match, uri) => 'URI="' + proxy(uri) + '"');
+    }
+    return proxy(trimmed);
+  }).join("\n");
+}
+
+app.get("/twitch2.m3u8", async (req, res) => {
+  try {
+    const upstream = await fetch(TWITCH2_SOURCE, { redirect: "follow", signal: AbortSignal.timeout(10000) });
+    if (!upstream.ok) {
+      if (upstream.body) await upstream.body.cancel().catch(() => {});
+      return res.status(200).type("application/vnd.apple.mpegurl")
+        .set("Cache-Control", "no-store, no-cache, must-revalidate")
+        .send(makeTwitch2OfflinePlaylist(req));
+    }
+    const finalUrl = new URL(upstream.url || TWITCH2_SOURCE);
+    if (finalUrl.hostname !== TWITCH2_HOST) {
+      if (upstream.body) await upstream.body.cancel().catch(() => {});
+      return res.status(502).send("Unexpected Twitch2 source host");
+    }
+    const playlist = await upstream.text();
+    if (!playlist.trimStart().startsWith("#EXTM3U")) {
+      return res.status(502).send("Invalid Twitch2 HLS playlist");
+    }
+    return res.status(200).type("application/vnd.apple.mpegurl")
+      .set("Cache-Control", "no-store, no-cache, must-revalidate")
+      .send(rewriteTwitch2Playlist(playlist, finalUrl.href, req));
+  } catch (_error) {
+    return res.status(200).type("application/vnd.apple.mpegurl")
+      .set("Cache-Control", "no-store, no-cache, must-revalidate")
+      .send(makeTwitch2OfflinePlaylist(req));
+  }
+});
+
+app.get("/twitch2-resource", async (req, res) => {
+  try {
+    const target = new URL(String(req.query.target || ""));
+    if (!["http:", "https:"].includes(target.protocol) || target.hostname !== TWITCH2_HOST) {
+      return res.status(403).send("Invalid Twitch2 resource URL");
+    }
+    const headers = {};
+    if (req.get("range")) headers.Range = req.get("range");
+    const upstream = await fetch(target.href, { headers, redirect: "follow", signal: AbortSignal.timeout(15000) });
+    const finalUrl = new URL(upstream.url || target.href);
+    if (finalUrl.hostname !== TWITCH2_HOST) {
+      if (upstream.body) await upstream.body.cancel().catch(() => {});
+      return res.status(502).send("Unexpected Twitch2 resource host");
+    }
+    if (!upstream.ok) return res.status(upstream.status).send("Twitch2 resource unavailable");
+    const contentType = upstream.headers.get("content-type") || "";
+    if (contentType.toLowerCase().includes("mpegurl") || /\.m3u8(?:$|\?)/i.test(finalUrl.href)) {
+      const playlist = await upstream.text();
+      if (!playlist.trimStart().startsWith("#EXTM3U")) return res.status(502).send("Invalid Twitch2 HLS playlist");
+      return res.status(200).type("application/vnd.apple.mpegurl")
+        .set("Cache-Control", "no-store")
+        .send(rewriteTwitch2Playlist(playlist, finalUrl.href, req));
+    }
+    const bytes = Buffer.from(await upstream.arrayBuffer());
+    return res.status(upstream.status)
+      .set("Content-Type", contentType || "video/mp2t")
+      .set("Cache-Control", "no-store")
+      .send(bytes);
+  } catch (_error) {
+    return res.status(502).send("Twitch2 resource proxy failed");
+  }
+});
+
 app.get("/movie/:username/:password/:id", requireDatabase, (req, res) => handleXtreamPlayback(req, res, "movie"));
 app.get("/series/:username/:password/:id", requireDatabase, (req, res) => handleXtreamPlayback(req, res, "series"));
 
