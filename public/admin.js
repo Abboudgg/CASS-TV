@@ -19,6 +19,7 @@ async function render() {
     document.getElementById("totalCount").textContent = items.length;
     document.getElementById("movieCount").textContent = items.filter(x => x.type === "movie").length;
     document.getElementById("seriesCount").textContent = items.filter(x => x.type === "series").length;
+    document.getElementById("liveCount").textContent = items.filter(x => x.type === "live").length;
     if (!items.length) {
       list.innerHTML = '<div class="empty">ما أضفت أي محتوى حتى الآن.</div>';
       return;
@@ -31,7 +32,7 @@ async function render() {
       const title = document.createElement("h3");
       title.textContent = item.title;
       const meta = document.createElement("p");
-      meta.textContent = item.type === "movie" ? "فيلم" : "مسلسل";
+      meta.textContent = item.type === "movie" ? "فيلم" : item.type === "series" ? "مسلسل" : "بث مباشر · يظهر في قائمة التشغيل";
       details.append(title, meta);
       const remove = document.createElement("button");
       remove.type = "button";
@@ -52,6 +53,7 @@ async function render() {
     document.getElementById("totalCount").textContent = "—";
     document.getElementById("movieCount").textContent = "—";
     document.getElementById("seriesCount").textContent = "—";
+    document.getElementById("liveCount").textContent = "—";
     list.innerHTML = "";
     const empty = document.createElement("div");
     empty.className = "empty";
