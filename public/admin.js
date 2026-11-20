@@ -60,6 +60,80 @@ async function render() {
   }
 }
 
+
+async function renderRequests() {
+  const requestList = document.getElementById("requestList");
+  if (!requestList) return;
+  if (!keyInput.value.trim()) {
+    requestList.textContent = "أدخل مفتاح الإدارة أعلاه لعرض الطلبات.";
+    return;
+  }
+  try {
+    const response = await fetch("/api/xtream/requests", { headers: adminHeaders() });
+    const data = await response.json().catch(() => []);
+    if (!response.ok) throw new Error(data.error || "تعذر تحميل الطلبات.");
+    requestList.replaceChildren();
+    if (!data.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = "لا توجد طلبات معلّقة حالياً.";
+      requestList.append(empty);
+      return;
+    }
+    data.forEach(request => {
+      const row = document.createElement("article");
+      row.className = "entry";
+      const details = document.createElement("div");
+      const title = document.createElement("h3");
+      title.textContent = request.username;
+      const meta = document.createElement("p");
+      meta.textContent = "طلب تسجيل جديد · " + new Date(request.created_at).toLocaleString("ar-SA");
+      details.append(title, meta);
+      const actions = document.createElement("div");
+      actions.style.display = "flex";
+      actions.style.flexWrap = "wrap";
+      actions.style.gap = "8px";
+      const duration = document.createElement("select");
+      duration.setAttribute("aria-label", "مدة الاشتراك");
+      [["7","7 أيام"],["30","30 يومًا"],["90","90 يومًا"],["180","180 يومًا"],["0","دائم"]].forEach(([value,label]) => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        duration.append(option);
+      });
+      const approve = document.createElement("button");
+      approve.type = "button";
+      approve.textContent = "موافقة";
+      approve.addEventListener("click", async () => {
+        approve.disabled = true;
+        const result = await fetch("/api/xtream/requests/" + request.id + "/approve", {
+          method: "POST", headers: adminHeaders(), body: JSON.stringify({ duration_days: Number(duration.value) })
+        });
+        const body = await result.json().catch(() => ({}));
+        if (!result.ok) { approve.disabled = false; return alert(body.error || "تعذرت الموافقة."); }
+        await renderRequests();
+        await render();
+        alert("تمت الموافقة وإنشاء حساب Xtream للمستخدم " + body.user.username);
+      });
+      const reject = document.createElement("button");
+      reject.type = "button";
+      reject.textContent = "رفض";
+      reject.addEventListener("click", async () => {
+        if (!confirm("هل تريد رفض طلب " + request.username + "؟")) return;
+        const result = await fetch("/api/xtream/requests/" + request.id + "/reject", { method: "POST", headers: adminHeaders() });
+        const body = await result.json().catch(() => ({}));
+        if (!result.ok) return alert(body.error || "تعذر رفض الطلب.");
+        renderRequests();
+      });
+      actions.append(duration, approve, reject);
+      row.append(details, actions);
+      requestList.append(row);
+    });
+  } catch (error) {
+    requestList.textContent = error.message;
+  }
+}
+
 function showMessage(message) {
   document.getElementById("formMessage").textContent = message;
 }
@@ -93,6 +167,6 @@ form.addEventListener("submit", async event => {
   }
 });
 
-document.getElementById("clearAll").addEventListener("click", render);
+document.getElementById("clearAll").addEventListener("click", render);\ndocument.getElementById("refreshRequests")?.addEventListener("click", renderRequests);
 
 render();
