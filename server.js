@@ -198,7 +198,7 @@ app.get("/api/xtream/requests", requireDatabase, requireAdmin, async (_req, res)
 });
 
 app.post("/api/xtream/requests/:id/approve", requireDatabase, requireAdmin, async (req, res) => {
-  if (!/^\\d+$/.test(req.params.id)) return res.status(400).json({ error: "معرّف الطلب غير صالح." });
+  if (!/^\d+$/.test(req.params.id)) return res.status(400).json({ error: "معرّف الطلب غير صالح." });
   const duration = Number(req.body?.duration_days);
   if (![0, 7, 30, 90, 180].includes(duration)) return res.status(400).json({ error: "مدة الاشتراك غير صحيحة." });
   const client = await pool.connect();
@@ -229,7 +229,7 @@ app.post("/api/xtream/requests/:id/approve", requireDatabase, requireAdmin, asyn
 });
 
 app.post("/api/xtream/requests/:id/reject", requireDatabase, requireAdmin, async (req, res) => {
-  if (!/^\\d+$/.test(req.params.id)) return res.status(400).json({ error: "معرّف الطلب غير صالح." });
+  if (!/^\d+$/.test(req.params.id)) return res.status(400).json({ error: "معرّف الطلب غير صالح." });
   try {
     const result = await pool.query("UPDATE xtream_registration_requests SET status = 'rejected' WHERE id = $1 AND status = 'pending' RETURNING id", [req.params.id]);
     if (!result.rowCount) return res.status(404).json({ error: "الطلب غير موجود أو تمت معالجته." });
