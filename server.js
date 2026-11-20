@@ -677,6 +677,10 @@ app.get("/twitch2-resource", async (req, res) => {
 app.get("/movie/:username/:password/:id", requireDatabase, (req, res) => handleXtreamPlayback(req, res, "movie"));
 app.get("/series/:username/:password/:id", requireDatabase, (req, res) => handleXtreamPlayback(req, res, "series"));
 
+app.get("/twitch2", (_req, res) => {
+  res.sendFile(path.join(__dirname, "public", "twitch2.html"));
+});
+
 app.get("/{*splat}", (_req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
