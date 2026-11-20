@@ -307,12 +307,11 @@ app.get("/get.php", requireDatabase, async (req, res) => {
   }
 });
 
-app.get("/:kind(movie|series)/:username/:password/:id", requireDatabase, async (req, res) => {
+async function handleXtreamPlayback(req, res, type) {
   try {
     const user = await findXtreamUser(req.params.username, req.params.password);
     if (!user) return res.status(401).send("Invalid username or password");
     if (!/^\d+$/.test(req.params.id)) return res.status(400).send("Invalid stream id");
-    const type = req.params.kind === "movie" ? "movie" : "series";
     const result = await pool.query(
       "SELECT stream FROM content WHERE id = $1 AND type = $2",
       [req.params.id, type]
@@ -326,7 +325,9 @@ app.get("/:kind(movie|series)/:username/:password/:id", requireDatabase, async (
     console.error("Xtream playback failed:", error.message);
     res.status(500).send("Playback unavailable");
   }
-});
+}
+app.get("/movie/:username/:password/:id", requireDatabase, (req, res) => handleXtreamPlayback(req, res, "movie"));
+app.get("/series/:username/:password/:id", requireDatabase, (req, res) => handleXtreamPlayback(req, res, "series"));
 
 app.get("/{*splat}", (_req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
