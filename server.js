@@ -131,7 +131,7 @@ app.get("/api/content", requireDatabase, async (_req, res) => {
 
 app.post("/api/content", requireDatabase, requireAdmin, async (req, res) => {
   const { type, title, poster = "", stream = "", description = "" } = req.body || {};
-  if (!["movie", "series"].includes(type) || typeof title !== "string" || !title.trim()) {
+  if (!["movie", "series", "live"].includes(type) || typeof title !== "string" || !title.trim()) {
     return res.status(400).json({ error: "نوع المحتوى والاسم مطلوبان." });
   }
   if (stream && !/^https?:\/\//i.test(String(stream))) {
@@ -314,8 +314,42 @@ app.get("/player_api.php", requireDatabase, async (req, res) => {
     if (action === "get_series_categories") {
       return res.json([{ category_id: "2", category_name: "المسلسلات", parent_id: 0 }]);
     }
-    if (action === "get_live_categories" || action === "get_live_streams" || action === "get_live_info") {
-      return res.json([]);
+    if (action === "get_live_categories") {
+      return res.json([{ category_id: "3", category_name: "البث المباشر", parent_id: 0 }]);
+    }
+    if (action === "get_live_streams") {
+      const result = await pool.query(
+        "SELECT id, title, poster, description, created_at FROM content WHERE type = 'live' ORDER BY created_at DESC"
+      );
+      return res.json(result.rows.map(item => ({
+        num: Number(item.id),
+        name: item.title,
+        title: item.title,
+        stream_type: "live",
+        stream_id: Number(item.id),
+        stream_icon: item.poster || "",
+        thumbnail: item.poster || "",
+        category_id: "3",
+        category_name: "البث المباشر",
+        epg_channel_id: "",
+        added: Math.floor(new Date(item.created_at).getTime() / 1000),
+        is_adult: 0,
+        tv_archive: 0,
+        tv_archive_duration: 0,
+        container_extension: "m3u8",
+        direct_source: ""
+      })));
+    }
+    if (action === "get_live_info") {
+      const id = String(req.query.stream_id || req.query.id || "");
+      if (!/^\\d+$/.test(id)) return res.status(400).json({ error: "معرّف القناة غير صالح." });
+      const result = await pool.query(
+        "SELECT id, title, poster, description FROM content WHERE id = $1 AND type = 'live'",
+        [id]
+      );
+      const item = result.rows[0];
+      if (!item) return res.status(404).json({ error: "القناة غير موجودة." });
+      return res.json({ info: { name: item.title, title: item.title, cover: item.poster || "", cover_big: item.poster || "", plot: item.description || "" } });
     }
     if (action === "get_vod_streams" || action === "get_series") {
       const type = action === "get_vod_streams" ? "movie" : "series";
@@ -371,13 +405,16 @@ app.get("/get.php", requireDatabase, async (req, res) => {
   try {
     const user = await findXtreamUser(req.query.username, req.query.password);
     if (!user) return res.status(401).send("Invalid username or password");
-    const result = await pool.query("SELECT id, title, poster FROM content WHERE type = 'movie' ORDER BY title");
+    const result = await pool.query("SELECT id, type, title, poster FROM content WHERE type IN ('movie', 'live') ORDER BY type, title");
     const username = String(req.query.username);
     const password = String(req.query.password);
     const lines = ["#EXTM3U"];
     for (const item of result.rows) {
-      lines.push("#EXTINF:-1 tvg-logo=\"" + (item.poster || "") + "\" group-title=\"Movies\"," + item.title);
-      lines.push(xtreamStreamUrl(req, "movie", username, password, item.id));
+      const isLive = item.type === "live";
+      lines.push("#EXTINF:-1 tvg-logo=\"" + (item.poster || "") + "\" group-title=\"" + (isLive ? "Live" : "Movies") + "\"," + item.title);
+      lines.push(isLive
+        ? publicBaseUrl(req) + "/live/" + encodeURIComponent(username) + "/" + encodeURIComponent(password) + "/" + item.id + ".m3u8"
+        : xtreamStreamUrl(req, "movie", username, password, item.id));
     }
     res.type("application/x-mpegURL").send(lines.join("\n"));
   } catch (error) {
@@ -405,6 +442,62 @@ async function handleXtreamPlayback(req, res, type) {
     res.status(500).send("Playback unavailable");
   }
 }
+let offlineSequence = Math.floor(Date.now() / 2000);
+
+async function isLiveSourceAvailable(stream) {
+  if (!/^https?:\\/\\//i.test(String(stream || ""))) return false;
+  try {
+    const head = await fetch(stream, { method: "HEAD", redirect: "follow", signal: AbortSignal.timeout(5000) });
+    if (head.ok) return true;
+    if (![403, 405, 501].includes(head.status)) return false;
+  } catch (_error) {}
+  try {
+    const probe = await fetch(stream, {
+      method: "GET",
+      headers: { Range: "bytes=0-1" },
+      redirect: "follow",
+      signal: AbortSignal.timeout(5000)
+    });
+    const available = probe.ok || probe.status === 206;
+    if (probe.body) await probe.body.cancel().catch(() => {});
+    return available;
+  } catch (_error) {
+    return false;
+  }
+}
+
+app.get("/live/:username/:password/:id.m3u8", requireDatabase, async (req, res) => {
+  try {
+    const user = await findXtreamUser(req.params.username, req.params.password);
+    if (!user) return res.status(401).send("Invalid username or password");
+    if (!/^\\d+$/.test(req.params.id)) return res.status(400).send("Invalid stream id");
+    const result = await pool.query("SELECT stream FROM content WHERE id = $1 AND type = 'live'", [req.params.id]);
+    const stream = result.rows[0]?.stream;
+    if (!stream) return res.status(404).send("Live channel not found");
+
+    if (await isLiveSourceAvailable(stream)) return res.redirect(302, stream);
+
+    const sequence = ++offlineSequence;
+    const base = publicBaseUrl(req);
+    const playlist = [
+      "#EXTM3U",
+      "#EXT-X-VERSION:3",
+      "#EXT-X-TARGETDURATION:2",
+      "#EXT-X-MEDIA-SEQUENCE:" + sequence,
+      "#EXTINF:2.0,",
+      base + "/offline/wait.ts?seq=" + sequence,
+      "#EXTINF:2.0,",
+      base + "/offline/wait.ts?seq=" + (sequence + 1),
+      "#EXTINF:2.0,",
+      base + "/offline/wait.ts?seq=" + (sequence + 2)
+    ].join("\n");
+    res.status(200).type("application/vnd.apple.mpegurl").set("Cache-Control", "no-store, no-cache, must-revalidate").send(playlist);
+  } catch (error) {
+    console.error("Live channel failed:", error.message);
+    res.status(500).send("Live channel unavailable");
+  }
+});
+
 app.get("/movie/:username/:password/:id", requireDatabase, (req, res) => handleXtreamPlayback(req, res, "movie"));
 app.get("/series/:username/:password/:id", requireDatabase, (req, res) => handleXtreamPlayback(req, res, "series"));
 
@@ -418,6 +511,8 @@ async function start() {
       await pool.query(
         "CREATE TABLE IF NOT EXISTS content (id BIGSERIAL PRIMARY KEY, type VARCHAR(10) NOT NULL CHECK (type IN ('movie', 'series')), title VARCHAR(100) NOT NULL, poster TEXT NOT NULL DEFAULT '', stream TEXT NOT NULL DEFAULT '', description VARCHAR(500) NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"
       );
+      await pool.query("ALTER TABLE content DROP CONSTRAINT IF EXISTS content_type_check");
+      await pool.query("ALTER TABLE content ADD CONSTRAINT content_type_check CHECK (type IN ('movie', 'series', 'live'))");
       await pool.query(
         "CREATE TABLE IF NOT EXISTS xtream_users (id BIGSERIAL PRIMARY KEY, username VARCHAR(32) NOT NULL UNIQUE, password_salt VARCHAR(64) NOT NULL, password_hash VARCHAR(128) NOT NULL, is_active BOOLEAN NOT NULL DEFAULT TRUE, expires_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"
       );
