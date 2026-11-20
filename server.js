@@ -74,7 +74,7 @@ app.post("/api/content", requireDatabase, requireAdmin, async (req, res) => {
 });
 
 app.delete("/api/content/:id", requireDatabase, requireAdmin, async (req, res) => {
-  if (!/^\\d+$/.test(req.params.id)) return res.status(400).json({ error: "معرّف غير صالح." });
+  if (!/^\d+$/.test(req.params.id)) return res.status(400).json({ error: "معرّف غير صالح." });
   try {
     const result = await pool.query("DELETE FROM content WHERE id = $1 RETURNING id", [req.params.id]);
     if (!result.rowCount) return res.status(404).json({ error: "المحتوى غير موجود." });
