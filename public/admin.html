@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101018">
+  <title>لوحة التحكم | CASS TV</title>
+  <link rel="stylesheet" href="/admin.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="/"><span class="mark">C</span>CASS <b>TV</b></a>
+    <p class="side-label">القائمة</p>
+    <a class="side-link selected" href="/admin">▦ نظرة عامة</a>
+    <a class="side-link" href="#add">＋ إضافة محتوى</a>
+    <a class="side-link" href="#library">▤ مكتبة المحتوى</a>
+    <a class="side-link" href="/#live">◉ البث المباشر</a>
+    <a class="side-link" href="/">↗ عرض الموقع</a>
+    <div class="side-note">نسخة تجريبية<br><span>لوحة الإدارة قيد التطوير</span></div>
+  </aside>
+
+  <main class="main">
+    <header class="top">
+      <div><span class="muted">CASS TV / الإدارة</span><h1>لوحة التحكم</h1></div>
+      <a class="site-link" href="/">زيارة الموقع ↗</a>
+    </header>
+
+    <section class="welcome">
+      <div><span class="tag">ADMIN DASHBOARD</span><h2>أهلاً بك في إدارة CASS TV</h2><p>أضف محتواك ورتّب مكتبتك من مكان واحد.</p></div>
+      <div class="welcome-mark">CASS<br><b>TV</b></div>
+    </section>
+
+    <section class="stats">
+      <article><span>إجمالي المحتوى</span><strong id="totalCount">0</strong><small>عنصر محفوظ في هذا المتصفح</small></article>
+      <article><span>الأفلام</span><strong id="movieCount">0</strong><small>في المكتبة التجريبية</small></article>
+      <article><span>المسلسلات</span><strong id="seriesCount">0</strong><small>في المكتبة التجريبية</small></article>
+    </section>
+
+    <section class="panel" id="add">
+      <div class="panel-head"><div><span class="tag">CONTENT MANAGER</span><h2>إضافة محتوى</h2></div></div>
+      <form id="contentForm">
+        <div class="form-grid">
+          <label>نوع المحتوى<select id="type"><option value="movie">فيلم</option><option value="series">مسلسل</option></select></label>
+          <label>اسم المحتوى<input id="title" required maxlength="100" placeholder="اكتب اسم الفيلم أو المسلسل"></label>
+          <label class="wide">رابط صورة الغلاف<input id="poster" type="url" placeholder="https://example.com/poster.jpg"></label>
+          <label class="wide">رابط الفيديو أو المصدر<input id="stream" type="url" placeholder="https://example.com/video.m3u8"></label>
+          <label class="wide">وصف المحتوى<textarea id="description" rows="3" maxlength="500" placeholder="نبذة قصيرة عن المحتوى"></textarea></label>
+        </div>
+        <p class="hint">ملاحظة: هذه نسخة أولية؛ البيانات تحفظ في هذا المتصفح فقط، وليست في قاعدة بيانات أو متاحة لبقية الزوار.</p>
+        <button type="submit">＋ حفظ المحتوى التجريبي</button>
+        <p id="formMessage" role="status"></p>
+      </form>
+    </section>
+
+    <section class="panel" id="library">
+      <div class="panel-head"><div><span class="tag">YOUR LIBRARY</span><h2>مكتبة المحتوى</h2></div><button class="clear" id="clearAll" type="button">حذف الكل</button></div>
+      <div id="contentList" class="content-list"><div class="empty">ما أضفت أي محتوى حتى الآن.</div></div>
+    </section>
+    <footer>CASS TV <span>لوحة تحكم تجريبية</span></footer>
+  </main>
+  <script src="/admin.js"></script>
+</body>
+</html>
