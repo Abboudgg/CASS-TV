@@ -6,6 +6,7 @@ const typeInput = document.getElementById("type");
 const streamInput = document.getElementById("stream");
 const streamHint = document.getElementById("streamHint");
 const categoryInput = document.getElementById("category");
+const teaserInput = document.getElementById("teaser");
 keyInput.value = sessionStorage.getItem(KEY_STORAGE) || "";
 
 function updateStreamHelp() {
@@ -170,6 +171,7 @@ form.addEventListener("submit", async event => {
     poster: document.getElementById("poster").value.trim(),
     category: categoryInput.value.trim() || "عام",
     stream: streamInput.value.trim(),
+    teaser_url: teaserInput.value.trim(),
     description: document.getElementById("description").value.trim()
   };
   if (payload.type === "live" && !/\.m3u8(?:$|[?#])/i.test(payload.stream)) {
@@ -178,6 +180,8 @@ form.addEventListener("submit", async event => {
   if (payload.type === "movie" && !/\.mp4(?:$|[?#])/i.test(payload.stream)) {
     return showMessage("رابط الفيلم يجب أن يكون بصيغة MP4.");
   }
+  if (payload.teaser_url && !/^https?:\/\//i.test(payload.teaser_url)) return showMessage("رابط التشويقة غير صالح.");
+  if (payload.type !== "movie") payload.teaser_url = "";
   if (payload.type === "series" && payload.stream && !/\.mp4(?:$|[?#])/i.test(payload.stream)) {
     return showMessage("إذا أضفت رابطاً للمسلسل فيجب أن يكون MP4؛ ويمكنك تركه فارغاً وإضافة الحلقات من قسم إدارة المواسم.");
   }
