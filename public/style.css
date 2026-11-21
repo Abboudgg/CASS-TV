@@ -65,3 +65,25 @@ footer { display: flex; justify-content: space-between; padding: 25px 10%; color
 }
 
 .header-actions{display:flex;align-items:center;gap:10px}.register-link{padding:10px 14px;border-radius:10px;background:#8b5cf6;color:white;font-size:13px;font-weight:700}@media(max-width:720px){.header-actions{margin-right:auto}}
+
+
+/* Dynamic movie and series library */
+.catalog-status { color: var(--muted); line-height: 1.8; }
+.library-section { margin-top: 32px; }
+.library-section h3 { margin: 0 0 16px; font-size: 20px; }
+.media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 18px; }
+.media-card { overflow: hidden; border: 1px solid #ffffff18; border-radius: 15px; background: var(--panel); min-width: 0; }
+.media-poster { display: block; width: 100%; aspect-ratio: 2 / 3; object-fit: cover; background: #242236; }
+.media-poster-empty { display: grid; place-items: center; color: #b69cff; font-size: 42px; }
+.media-info { padding: 13px; }
+.media-info h4 { margin: 0 0 8px; font-size: 16px; overflow-wrap: anywhere; }
+.media-info p { color: var(--muted); font-size: 13px; line-height: 1.6; margin: 0 0 12px; overflow-wrap: anywhere; }
+.media-play { width: 100%; border: 0; border-radius: 9px; padding: 11px; color: white; background: var(--accent); font: inherit; font-weight: 700; cursor: pointer; }
+.media-play:disabled { opacity: .45; cursor: not-allowed; }
+.catalog-empty { color: var(--muted); font-size: 14px; }
+.media-player-dialog { width: min(900px, 94vw); max-width: 94vw; border: 1px solid #ffffff25; border-radius: 16px; padding: 20px; color: var(--text); background: #151520; }
+.media-player-dialog::backdrop { background: #000c; }
+.media-player-dialog h3 { margin: 14px 0; }
+.media-player-dialog video { display: block; width: 100%; max-height: 70vh; background: #000; border-radius: 10px; }
+.player-close { display: block; margin-right: auto; border: 1px solid #ffffff30; border-radius: 8px; padding: 8px 12px; background: transparent; color: white; font: inherit; cursor: pointer; }
+@media (max-width: 480px) { .media-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; } .media-info { padding: 10px; } }
