@@ -65,35 +65,77 @@
 
     <section class="content-section submit-series" id="submit-series">
       <div class="section-heading">
-        <div>
-          <span class="eyebrow">JOIN CASS TV</span>
-          <h2>أضف مسلسلك معنا</h2>
-        </div>
+        <div><span class="eyebrow">JOIN CASS TV</span><h2>أضف مسلسلك معنا</h2></div>
       </div>
-      <p>عندك مسلسل أو عمل تبي تقترح إضافته إلى CASS TV؟ أرسل تفاصيله لنا عبر البريد الإلكتروني.</p>
+      <p>اقترح مسلسلاً أو فيلماً وسنراجعه. ستحصل على رقم طلب لمتابعة حالته.</p>
       <form class="series-submit-form" id="seriesSubmitForm">
-        <label>اسم المسلسل أو العمل<input name="title" required maxlength="120" placeholder="اكتب اسم المسلسل"></label>
-        <label>الفئة<select name="category"><option>دراما</option><option>كوميدي</option><option>أكشن</option><option>رعب</option><option>وثائقي</option><option>أخرى</option></select></label>
-        <label class="form-wide">رابط العمل أو معلومات عنه<textarea name="details" rows="4" maxlength="1200" placeholder="أضف رابطاً أو تفاصيل تساعدنا في مراجعة طلبك"></textarea></label>
-        <button class="primary-button" type="submit">إرسال الطلب بالبريد</button>
-        <p class="form-note">سيتم فتح تطبيق البريد لديك لإرسال الطلب إلى ab.cass@outlook.sa</p>
-        <p class="form-note" id="seriesSubmitStatus" role="status"></p>
+        <label>اسم العمل<input name="title" required minlength="2" maxlength="120" placeholder="اسم المسلسل أو الفيلم"></label>
+        <label>الفئة<select name="category" required><option value="دراما">دراما</option><option value="كوميدي">كوميدي</option><option value="أكشن">أكشن</option><option value="رعب">رعب</option><option value="وثائقي">وثائقي</option><option value="أنمي">أنمي</option><option value="أخرى">أخرى</option></select></label>
+        <label>اسمك (اختياري)<input name="submitter" maxlength="80" placeholder="اسم المرسل"></label>
+        <label>بريدك للتواصل (اختياري)<input name="email" type="email" maxlength="254" placeholder="name@example.com"></label>
+        <label class="form-wide">رابط صورة الغلاف (اختياري)<input name="poster" type="url" maxlength="1000" placeholder="https://example.com/poster.jpg"></label>
+        <label class="form-wide">رابط العمل أو التفاصيل<textarea name="details" rows="4" maxlength="1500" placeholder="اكتب نبذة أو رابطاً يساعدنا في مراجعة الاقتراح"></textarea></label>
+        <label class="trap-field" aria-hidden="true">اترك هذا الحقل فارغاً<input name="website" tabindex="-1" autocomplete="off"></label>
+        <button class="primary-button" type="submit">إرسال الاقتراح</button>
+        <p class="form-note">لن يُنشر اقتراحك تلقائياً؛ تتم مراجعته أولاً.</p>
+        <p class="form-note" id="seriesSubmitStatus" role="status" aria-live="polite"></p>
       </form>
+      <div class="track-box">
+        <h3>متابعة طلبك</h3>
+        <p>أدخل رقم الطلب الذي ظهر لك بعد الإرسال.</p>
+        <form id="trackSeriesForm" class="track-form">
+          <input id="trackCode" required maxlength="8" pattern="[A-Fa-f0-9]{8}" placeholder="مثال: A1B2C3D4" aria-label="رقم الطلب">
+          <button type="submit">متابعة</button>
+        </form>
+        <div id="trackResult" class="track-result" role="status" aria-live="polite"></div>
+      </div>
     </section>
   </main>
 
   <footer><span>CASS TV</span><span>© <span id="year"></span> جميع الحقوق محفوظة</span></footer>
   <script src="/app.js"></script>
   <script>
-    document.getElementById("seriesSubmitForm")?.addEventListener("submit", event => {
+    const submitForm = document.getElementById("seriesSubmitForm");
+    const submitStatus = document.getElementById("seriesSubmitStatus");
+    submitForm?.addEventListener("submit", async event => {
       event.preventDefault();
-      const form = event.currentTarget;
-      const data = new FormData(form);
-      const subject = "طلب إضافة مسلسل إلى CASS TV: " + data.get("title");
-      const body = "اسم العمل: " + data.get("title") + "\\nالفئة: " + data.get("category") + "\\nالتفاصيل أو الرابط: " + (data.get("details") || "لم تتم إضافة تفاصيل");
-      const link = "mailto:ab.cass@outlook.sa?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
-      window.location.href = link;
-      document.getElementById("seriesSubmitStatus").textContent = "تم تجهيز رسالة البريد. أرسلها من تطبيق البريد لإكمال الطلب.";
+      const button = submitForm.querySelector('button[type="submit"]');
+      button.disabled = true;
+      submitStatus.textContent = "جارٍ إرسال اقتراحك...";
+      const formData = new FormData(submitForm);
+      const payload = Object.fromEntries(formData.entries());
+      try {
+        const response = await fetch("/api/series-submissions", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || "تعذر إرسال الاقتراح.");
+        if (result.request_code) {
+          document.getElementById("trackCode").value = result.request_code;
+          localStorage.setItem("cassLastSeriesRequest", result.request_code);
+          submitStatus.textContent = "وصلنا اقتراحك! رقم طلبك: " + result.request_code + " — احتفظ به لمتابعة الحالة.";
+        } else {
+          submitStatus.textContent = "تم استلام الطلب.";
+        }
+        submitForm.reset();
+      } catch (error) {
+        submitStatus.textContent = error.message;
+      } finally { button.disabled = false; }
+    });
+    const trackInput = document.getElementById("trackCode");
+    trackInput.value = localStorage.getItem("cassLastSeriesRequest") || "";
+    document.getElementById("trackSeriesForm")?.addEventListener("submit", async event => {
+      event.preventDefault();
+      const code = trackInput.value.trim().toUpperCase();
+      const resultBox = document.getElementById("trackResult");
+      resultBox.textContent = "جارٍ البحث عن الطلب...";
+      try {
+        const response = await fetch("/api/series-submissions/track/" + encodeURIComponent(code), { cache: "no-store" });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || "تعذر العثور على الطلب.");
+        const labels = { new: "وصلنا طلبك", reviewing: "قيد المراجعة", approved: "تمت الموافقة", rejected: "لم تتم الموافقة" };
+        resultBox.textContent = "العمل: " + data.title + " · الحالة: " + (labels[data.status] || data.status) + " · رقم الطلب: " + data.request_code;
+      } catch (error) { resultBox.textContent = error.message; }
     });
   </script>
 </body>
