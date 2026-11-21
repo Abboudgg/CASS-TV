@@ -121,7 +121,7 @@ app.get("/api", (_req, res) => {
 app.get("/api/content", requireDatabase, async (_req, res) => {
   try {
     const result = await pool.query(
-      "SELECT id, type, title, poster, stream, description, created_at FROM content ORDER BY created_at DESC"
+      "SELECT id, type, title, poster, stream, description, category, created_at FROM content ORDER BY created_at DESC"
     );
     res.json(result.rows);
   } catch (error) {
@@ -131,8 +131,8 @@ app.get("/api/content", requireDatabase, async (_req, res) => {
 });
 
 app.post("/api/content", requireDatabase, requireAdmin, async (req, res) => {
-  const { type, title, poster = "", stream = "", description = "" } = req.body || {};
-  if (!["movie", "series", "live"].includes(type) || typeof title !== "string" || !title.trim()) {
+  const { type, title, poster = "", stream = "", description = "", category = "عام" } = req.body || {};
+  if (!["movie", "series", "live"].includes(type) || typeof title !== "string" || !title.trim() || typeof category !== "string" || !category.trim() || category.trim().length > 60) {
     return res.status(400).json({ error: "نوع المحتوى والاسم مطلوبان." });
   }
   if (type === "live" && (typeof stream !== "string" || !stream.trim())) {
@@ -143,8 +143,8 @@ app.post("/api/content", requireDatabase, requireAdmin, async (req, res) => {
   }
   try {
     const result = await pool.query(
-      "INSERT INTO content (type, title, poster, stream, description) VALUES ($1, $2, $3, $4, $5) RETURNING id, type, title, poster, stream, description, created_at",
-      [type, title.trim().slice(0, 100), String(poster).slice(0, 1000), String(stream).slice(0, 2000), String(description).slice(0, 500)]
+      "INSERT INTO content (type, title, poster, stream, description, category) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, type, title, poster, stream, description, category, created_at",
+      [type, title.trim().slice(0, 100), String(poster).slice(0, 1000), String(stream).slice(0, 2000), String(description).slice(0, 500), category.trim().slice(0, 60)]
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -368,10 +368,12 @@ app.get("/player_api.php", requireDatabase, async (req, res) => {
     if (!action) return res.json({ user_info: userInfo, server_info: serverInfo(req) });
 
     if (action === "get_vod_categories") {
-      return res.json([{ category_id: "1", category_name: "الأفلام", parent_id: 0 }]);
+      const result = await pool.query("SELECT DISTINCT category FROM content WHERE type = 'movie' ORDER BY category");
+      return res.json(result.rows.map(row => ({ category_id: row.category, category_name: row.category, parent_id: 0 })));
     }
     if (action === "get_series_categories") {
-      return res.json([{ category_id: "2", category_name: "المسلسلات", parent_id: 0 }]);
+      const result = await pool.query("SELECT DISTINCT category FROM content WHERE type = 'series' ORDER BY category");
+      return res.json(result.rows.map(row => ({ category_id: row.category, category_name: row.category, parent_id: 0 })));
     }
     if (action === "get_live_categories") {
       return res.json([{ category_id: "3", category_name: "البث المباشر", parent_id: 0 }]);
@@ -413,7 +415,7 @@ app.get("/player_api.php", requireDatabase, async (req, res) => {
     if (action === "get_vod_streams" || action === "get_series") {
       const type = action === "get_vod_streams" ? "movie" : "series";
       const result = await pool.query(
-        "SELECT id, title, poster, description, created_at FROM content WHERE type = $1 ORDER BY created_at DESC",
+        "SELECT id, title, poster, description, category, created_at FROM content WHERE type = $1 ORDER BY created_at DESC",
         [type]
       );
       return res.json(result.rows.map(item => ({
@@ -425,7 +427,8 @@ app.get("/player_api.php", requireDatabase, async (req, res) => {
         stream_icon: item.poster || "",
         cover: item.poster || "",
         plot: item.description || "",
-        category_id: type === "movie" ? "1" : "2",
+        category_id: item.category || "عام",
+        category_name: item.category || "عام",
         container_extension: "mp4",
         added: Math.floor(new Date(item.created_at).getTime() / 1000),
         direct_source: ""
@@ -486,16 +489,24 @@ app.get("/get.php", requireDatabase, async (req, res) => {
   try {
     const user = await findXtreamUser(req.query.username, req.query.password);
     if (!user) return res.status(401).send("Invalid username or password");
-    const result = await pool.query("SELECT id, type, title, poster FROM content WHERE type IN ('movie', 'live') ORDER BY type, title");
+    const result = await pool.query("SELECT id, type, title, poster, category FROM content WHERE type IN ('movie', 'live') ORDER BY type, title");
     const username = String(req.query.username);
     const password = String(req.query.password);
     const lines = ["#EXTM3U"];
     for (const item of result.rows) {
       const isLive = item.type === "live";
-      lines.push("#EXTINF:-1 tvg-logo=\"" + (item.poster || "") + "\" group-title=\"" + (isLive ? "Live" : "Movies") + "\"," + item.title);
+      const group = isLive ? "البث المباشر" : "الأفلام - " + (item.category || "عام");
+      lines.push("#EXTINF:-1 tvg-logo=\"" + (item.poster || "") + "\" group-title=\"" + group + "\"," + item.title);
       lines.push(isLive
         ? publicBaseUrl(req) + "/live/" + encodeURIComponent(username) + "/" + encodeURIComponent(password) + "/" + item.id + ".m3u8"
         : xtreamStreamUrl(req, "movie", username, password, item.id));
+    }
+    const episodeRows = await pool.query("SELECT e.id, e.episode_number, e.title, c.title AS series_title, c.category, c.poster FROM series_episodes e JOIN series_seasons s ON s.id = e.season_id JOIN content c ON c.id = s.series_id WHERE c.type = 'series' ORDER BY c.title, s.season_number, e.episode_number");
+    for (const episode of episodeRows.rows) {
+      const group = ("المسلسلات - " + (episode.category || "عام") + " - " + episode.series_title).replace(/"/g, "");
+      const title = episode.series_title + " · الحلقة " + episode.episode_number + " · " + episode.title;
+      lines.push("#EXTINF:-1 tvg-logo=\"" + (episode.poster || "") + "\" group-title=\"" + group + "\"," + title);
+      lines.push(publicBaseUrl(req) + "/series/" + encodeURIComponent(username) + "/" + encodeURIComponent(password) + "/" + episode.id + ".mp4");
     }
     res.type("application/x-mpegURL").send(lines.join("\n"));
   } catch (error) {
@@ -752,6 +763,20 @@ app.get("/twitch2-resource", async (req, res) => {
 });
 
 app.get("/movie/:username/:password/:id", requireDatabase, (req, res) => handleXtreamPlayback(req, res, "movie"));
+app.get("/series/:username/:password/:id.mp4", requireDatabase, async (req, res) => {
+  try {
+    const user = await findXtreamUser(req.params.username, req.params.password);
+    if (!user) return res.status(401).send("Invalid username or password");
+    if (!/^\\d+$/.test(req.params.id)) return res.status(400).send("Invalid episode id");
+    const result = await pool.query("SELECT stream FROM series_episodes WHERE id = $1", [req.params.id]);
+    const stream = result.rows[0]?.stream;
+    if (!stream || !/^https?:\\/\\//i.test(stream)) return res.status(404).send("Episode stream not found");
+    return res.redirect(302, stream);
+  } catch (error) {
+    console.error("Series episode playback failed:", error.message);
+    res.status(500).send("Playback unavailable");
+  }
+});
 app.get("/series/:username/:password/:id", requireDatabase, (req, res) => handleXtreamPlayback(req, res, "series"));
 
 app.get("/twitch2", (_req, res) => {
@@ -768,6 +793,7 @@ async function start() {
       await pool.query(
         "CREATE TABLE IF NOT EXISTS content (id BIGSERIAL PRIMARY KEY, type VARCHAR(10) NOT NULL CHECK (type IN ('movie', 'series')), title VARCHAR(100) NOT NULL, poster TEXT NOT NULL DEFAULT '', stream TEXT NOT NULL DEFAULT '', description VARCHAR(500) NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"
       );
+      await pool.query("ALTER TABLE content ADD COLUMN IF NOT EXISTS category VARCHAR(60) NOT NULL DEFAULT 'عام'");
       await pool.query("CREATE TABLE IF NOT EXISTS series_seasons (id BIGSERIAL PRIMARY KEY, series_id BIGINT NOT NULL REFERENCES content(id) ON DELETE CASCADE, season_number INTEGER NOT NULL CHECK (season_number > 0), title VARCHAR(100) NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(series_id, season_number))");
       await pool.query("CREATE TABLE IF NOT EXISTS series_episodes (id BIGSERIAL PRIMARY KEY, season_id BIGINT NOT NULL REFERENCES series_seasons(id) ON DELETE CASCADE, episode_number INTEGER NOT NULL CHECK (episode_number > 0), title VARCHAR(120) NOT NULL, stream TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(season_id, episode_number))");
       await pool.query("ALTER TABLE content DROP CONSTRAINT IF EXISTS content_type_check");
