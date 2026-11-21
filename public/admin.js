@@ -271,3 +271,5 @@ document.getElementById("addEpisode").addEventListener("click", async () => {
   if (response.ok) { document.getElementById("episodeTitle").value = ""; document.getElementById("episodeStream").value = ""; await loadSeasonOptions(); }
 });
 
+
+loadSeriesManager();
