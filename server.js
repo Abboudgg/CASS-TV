@@ -5,6 +5,18 @@ const { Pool } = require("pg");
 const crypto = require("crypto");
 
 const app = express();
+
+const submissionAttempts = new Map();
+function limitSeriesSubmissions(req, res, next) {
+  const ip = req.ip || req.socket.remoteAddress || "unknown";
+  const now = Date.now();
+  const recent = (submissionAttempts.get(ip) || []).filter(time => now - time < 3600000);
+  if (recent.length >= 5) return res.status(429).json({ error: "وصلت للحد المؤقت للطلبات. حاول بعد ساعة." });
+  recent.push(now);
+  submissionAttempts.set(ip, recent);
+  next();
+}
+
 const PORT = process.env.PORT || 3000;
 const pool = process.env.DATABASE_URL
   ? new Pool({
@@ -218,6 +230,98 @@ app.post("/api/seasons/:id/episodes", requireDatabase, requireAdmin, async (req,
     if (error.code === "23505") return res.status(409).json({ error: "رقم الحلقة موجود في هذا الموسم بالفعل." });
     console.error("Episode insert failed:", error.message);
     res.status(500).json({ error: "تعذرت إضافة الحلقة." });
+  }
+});
+
+
+app.post("/api/series-submissions", requireDatabase, limitSeriesSubmissions, async (req, res) => {
+  const body = req.body || {};
+  if (typeof body.website === "string" && body.website.trim()) return res.status(200).json({ success: true });
+  const title = typeof body.title === "string" ? body.title.trim() : "";
+  const category = typeof body.category === "string" ? body.category.trim() : "";
+  const details = typeof body.details === "string" ? body.details.trim() : "";
+  const poster = typeof body.poster === "string" ? body.poster.trim() : "";
+  const submitter = typeof body.submitter === "string" ? body.submitter.trim() : "";
+  const email = typeof body.email === "string" ? body.email.trim() : "";
+  if (title.length < 2 || title.length > 120 || !category || category.length > 60)
+    return res.status(400).json({ error: "اكتب اسم العمل واختر فئته." });
+  if (details.length > 1500 || submitter.length > 80 || poster.length > 1000)
+    return res.status(400).json({ error: "بعض البيانات أطول من الحد المسموح." });
+  if (email && (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)))
+    return res.status(400).json({ error: "البريد الإلكتروني غير صحيح." });
+  if (poster) {
+    try { if (!["http:", "https:"].includes(new URL(poster).protocol)) throw new Error(); }
+    catch { return res.status(400).json({ error: "رابط الغلاف غير صالح." }); }
+  }
+  try {
+    const duplicate = await pool.query("SELECT 1 FROM series_submissions WHERE lower(title) = lower($1) AND created_at > NOW() - INTERVAL '10 minutes' LIMIT 1", [title]);
+    if (duplicate.rowCount) return res.status(409).json({ error: "وصلنا اقتراح بهذا الاسم مؤخراً. جرّب لاحقاً." });
+    const code = crypto.randomBytes(4).toString("hex").toUpperCase();
+    const inserted = await pool.query(
+      "INSERT INTO series_submissions (title, category, details, poster_url, submitter_name, contact_email, request_code) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, title, request_code, status",
+      [title, category, details, poster, submitter, email, code]
+    );
+    const item = inserted.rows[0];
+    let emailSent = false;
+    if (process.env.RESEND_API_KEY && process.env.EMAIL_FROM) {
+      try {
+        const mail = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: { "Authorization": "Bearer " + process.env.RESEND_API_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            from: process.env.EMAIL_FROM,
+            to: ["ab.cass@outlook.sa"],
+            subject: "اقتراح مسلسل جديد · CASS TV · " + title,
+            text: ["اقتراح جديد في CASS TV", "رقم الطلب: " + code, "اسم العمل: " + title, "الفئة: " + category, "مقدم الطلب: " + (submitter || "غير محدد"), "بريد التواصل: " + (email || "غير مضاف"), "رابط الغلاف: " + (poster || "غير مضاف"), "التفاصيل: " + (details || "لا توجد تفاصيل")].join("\n")
+          })
+        });
+        if (mail.ok) {
+          emailSent = true;
+          await pool.query("UPDATE series_submissions SET email_sent = TRUE WHERE id = $1", [item.id]);
+        } else console.error("Series submission email failed:", await mail.text());
+      } catch (mailError) { console.error("Series submission email error:", mailError.message); }
+    }
+    res.status(201).json({ success: true, request_code: item.request_code, status: item.status, email_sent: emailSent, message: "تم حفظ اقتراحك بنجاح." });
+  } catch (error) {
+    console.error("Series submission failed:", error.message);
+    res.status(500).json({ error: "تعذر حفظ الطلب حالياً. حاول مرة أخرى." });
+  }
+});
+
+app.get("/api/series-submissions/track/:code", requireDatabase, async (req, res) => {
+  const code = String(req.params.code || "").trim().toUpperCase();
+  if (!/^[A-F0-9]{8}$/.test(code)) return res.status(400).json({ error: "رقم الطلب غير صحيح." });
+  try {
+    const result = await pool.query("SELECT request_code, title, status, created_at, updated_at FROM series_submissions WHERE request_code = $1", [code]);
+    if (!result.rowCount) return res.status(404).json({ error: "لم نعثر على طلب بهذا الرقم." });
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error("Series submission tracking failed:", error.message);
+    res.status(500).json({ error: "تعذر متابعة الطلب." });
+  }
+});
+
+app.get("/api/admin/series-submissions", requireDatabase, requireAdmin, async (_req, res) => {
+  try {
+    const result = await pool.query("SELECT id, title, category, details, poster_url, submitter_name, contact_email, request_code, status, email_sent, created_at, updated_at FROM series_submissions ORDER BY created_at DESC LIMIT 200");
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Admin series submissions read failed:", error.message);
+    res.status(500).json({ error: "تعذر تحميل اقتراحات المسلسلات." });
+  }
+});
+
+app.patch("/api/admin/series-submissions/:id", requireDatabase, requireAdmin, async (req, res) => {
+  if (!/^\d+$/.test(req.params.id)) return res.status(400).json({ error: "رقم الطلب غير صحيح." });
+  const status = String(req.body?.status || "");
+  if (!["new", "reviewing", "approved", "rejected"].includes(status)) return res.status(400).json({ error: "حالة الطلب غير صحيحة." });
+  try {
+    const result = await pool.query("UPDATE series_submissions SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING id, status, request_code", [status, req.params.id]);
+    if (!result.rowCount) return res.status(404).json({ error: "الطلب غير موجود." });
+    res.json({ success: true, ...result.rows[0] });
+  } catch (error) {
+    console.error("Series submission update failed:", error.message);
+    res.status(500).json({ error: "تعذر تحديث حالة الطلب." });
   }
 });
 
@@ -794,6 +898,7 @@ async function start() {
         "CREATE TABLE IF NOT EXISTS content (id BIGSERIAL PRIMARY KEY, type VARCHAR(10) NOT NULL CHECK (type IN ('movie', 'series')), title VARCHAR(100) NOT NULL, poster TEXT NOT NULL DEFAULT '', stream TEXT NOT NULL DEFAULT '', description VARCHAR(500) NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"
       );
       await pool.query("ALTER TABLE content ADD COLUMN IF NOT EXISTS category VARCHAR(60) NOT NULL DEFAULT 'عام'");
+      await pool.query("CREATE TABLE IF NOT EXISTS series_submissions (id BIGSERIAL PRIMARY KEY, title VARCHAR(120) NOT NULL, category VARCHAR(60) NOT NULL, details VARCHAR(1500) NOT NULL DEFAULT '', poster_url TEXT NOT NULL DEFAULT '', submitter_name VARCHAR(80) NOT NULL DEFAULT '', contact_email VARCHAR(254) NOT NULL DEFAULT '', request_code VARCHAR(8) NOT NULL UNIQUE, status VARCHAR(12) NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'reviewing', 'approved', 'rejected')), email_sent BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
       await pool.query("CREATE TABLE IF NOT EXISTS series_seasons (id BIGSERIAL PRIMARY KEY, series_id BIGINT NOT NULL REFERENCES content(id) ON DELETE CASCADE, season_number INTEGER NOT NULL CHECK (season_number > 0), title VARCHAR(100) NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(series_id, season_number))");
       await pool.query("CREATE TABLE IF NOT EXISTS series_episodes (id BIGSERIAL PRIMARY KEY, season_id BIGINT NOT NULL REFERENCES series_seasons(id) ON DELETE CASCADE, episode_number INTEGER NOT NULL CHECK (episode_number > 0), title VARCHAR(120) NOT NULL, stream TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(season_id, episode_number))");
       await pool.query("ALTER TABLE content DROP CONSTRAINT IF EXISTS content_type_check");
