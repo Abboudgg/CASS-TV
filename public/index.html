@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#101018">
+  <meta name="theme-color" content="#4a071b">
   <meta name="description" content="CASS TV - منصتك للمشاهدة">
   <title>CASS TV</title>
   <link rel="stylesheet" href="/style.css">
@@ -19,6 +19,7 @@
       <a href="#movies">الأفلام</a>
       <a href="#series">المسلسلات</a>
       <a href="#live">البث المباشر</a>
+      <a href="#submit-series">أضف مسلسلك معنا</a>
     </nav>
     <div class="header-actions"><a class="register-link" href="/register.html">إنشاء حساب</a><a class="admin-link" href="/admin">لوحة التحكم</a></div>
   </header>
@@ -61,9 +62,39 @@
         <article id="series"><span>📺</span><h3>المسلسلات</h3><p>المواسم والحلقات</p></article>
       </div>
     </section>
+
+    <section class="content-section submit-series" id="submit-series">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">JOIN CASS TV</span>
+          <h2>أضف مسلسلك معنا</h2>
+        </div>
+      </div>
+      <p>عندك مسلسل أو عمل تبي تقترح إضافته إلى CASS TV؟ أرسل تفاصيله لنا عبر البريد الإلكتروني.</p>
+      <form class="series-submit-form" id="seriesSubmitForm">
+        <label>اسم المسلسل أو العمل<input name="title" required maxlength="120" placeholder="اكتب اسم المسلسل"></label>
+        <label>الفئة<select name="category"><option>دراما</option><option>كوميدي</option><option>أكشن</option><option>رعب</option><option>وثائقي</option><option>أخرى</option></select></label>
+        <label class="form-wide">رابط العمل أو معلومات عنه<textarea name="details" rows="4" maxlength="1200" placeholder="أضف رابطاً أو تفاصيل تساعدنا في مراجعة طلبك"></textarea></label>
+        <button class="primary-button" type="submit">إرسال الطلب بالبريد</button>
+        <p class="form-note">سيتم فتح تطبيق البريد لديك لإرسال الطلب إلى ab.cass@outlook.sa</p>
+        <p class="form-note" id="seriesSubmitStatus" role="status"></p>
+      </form>
+    </section>
   </main>
 
   <footer><span>CASS TV</span><span>© <span id="year"></span> جميع الحقوق محفوظة</span></footer>
   <script src="/app.js"></script>
+  <script>
+    document.getElementById("seriesSubmitForm")?.addEventListener("submit", event => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const data = new FormData(form);
+      const subject = "طلب إضافة مسلسل إلى CASS TV: " + data.get("title");
+      const body = "اسم العمل: " + data.get("title") + "\\nالفئة: " + data.get("category") + "\\nالتفاصيل أو الرابط: " + (data.get("details") || "لم تتم إضافة تفاصيل");
+      const link = "mailto:ab.cass@outlook.sa?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
+      window.location.href = link;
+      document.getElementById("seriesSubmitStatus").textContent = "تم تجهيز رسالة البريد. أرسلها من تطبيق البريد لإكمال الطلب.";
+    });
+  </script>
 </body>
 </html>
