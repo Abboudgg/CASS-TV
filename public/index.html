@@ -84,7 +84,7 @@
         <h3>متابعة طلبك</h3>
         <p>أدخل رقم الطلب الذي ظهر لك بعد الإرسال.</p>
         <form id="trackSeriesForm" class="track-form">
-          <input id="trackCode" required maxlength="8" pattern="[A-Fa-f0-9]{8}" placeholder="مثال: A1B2C3D4" aria-label="رقم الطلب">
+          <input id="trackCode" required maxlength="16" pattern="[A-Fa-f0-9]{16}" placeholder="رقم الطلب المكوّن من 16 خانة" aria-label="رقم الطلب">
           <button type="submit">متابعة</button>
         </form>
         <div id="trackResult" class="track-result" role="status" aria-live="polite"></div>
@@ -113,7 +113,7 @@
         if (result.request_code) {
           document.getElementById("trackCode").value = result.request_code;
           localStorage.setItem("cassLastSeriesRequest", result.request_code);
-          submitStatus.textContent = "وصلنا اقتراحك! رقم طلبك: " + result.request_code + " — احتفظ به لمتابعة الحالة.";
+          submitStatus.textContent = "وصلنا اقتراحك! رقم طلبك: " + result.request_code + " — احتفظ به لمتابعة الحالة." + (result.email_sent ? " وتم إرسال إشعار للإدارة." : " تم حفظه، وإشعار البريد يحتاج تفعيل إعدادات الإدارة.");
         } else {
           submitStatus.textContent = "تم استلام الطلب.";
         }
