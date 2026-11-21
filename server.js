@@ -133,7 +133,7 @@ app.get("/api", (_req, res) => {
 app.get("/api/content", requireDatabase, async (_req, res) => {
   try {
     const result = await pool.query(
-      "SELECT id, type, title, poster, stream, description, category, created_at FROM content ORDER BY created_at DESC"
+      "SELECT id, type, title, poster, stream, teaser_url, description, category, created_at FROM content ORDER BY created_at DESC"
     );
     res.json(result.rows);
   } catch (error) {
@@ -143,7 +143,7 @@ app.get("/api/content", requireDatabase, async (_req, res) => {
 });
 
 app.post("/api/content", requireDatabase, requireAdmin, async (req, res) => {
-  const { type, title, poster = "", stream = "", description = "", category = "عام" } = req.body || {};
+  const { type, title, poster = "", stream = "", teaser_url = "", description = "", category = "عام" } = req.body || {};
   if (!["movie", "series", "live"].includes(type) || typeof title !== "string" || !title.trim() || typeof category !== "string" || !category.trim() || category.trim().length > 60) {
     return res.status(400).json({ error: "نوع المحتوى والاسم مطلوبان." });
   }
@@ -155,8 +155,8 @@ app.post("/api/content", requireDatabase, requireAdmin, async (req, res) => {
   }
   try {
     const result = await pool.query(
-      "INSERT INTO content (type, title, poster, stream, description, category) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, type, title, poster, stream, description, category, created_at",
-      [type, title.trim().slice(0, 100), String(poster).slice(0, 1000), String(stream).slice(0, 2000), String(description).slice(0, 500), category.trim().slice(0, 60)]
+      "INSERT INTO content (type, title, poster, stream, teaser_url, description, category) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, type, title, poster, stream, teaser_url, description, category, created_at",
+      [type, title.trim().slice(0, 100), String(poster).slice(0, 1000), String(stream).slice(0, 2000), String(teaser_url).slice(0, 2000), String(description).slice(0, 500), category.trim().slice(0, 60)]
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -898,6 +898,7 @@ async function start() {
         "CREATE TABLE IF NOT EXISTS content (id BIGSERIAL PRIMARY KEY, type VARCHAR(10) NOT NULL CHECK (type IN ('movie', 'series')), title VARCHAR(100) NOT NULL, poster TEXT NOT NULL DEFAULT '', stream TEXT NOT NULL DEFAULT '', description VARCHAR(500) NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"
       );
       await pool.query("ALTER TABLE content ADD COLUMN IF NOT EXISTS category VARCHAR(60) NOT NULL DEFAULT 'عام'");
+      await pool.query("ALTER TABLE content ADD COLUMN IF NOT EXISTS teaser_url TEXT NOT NULL DEFAULT ''");
       await pool.query("CREATE TABLE IF NOT EXISTS series_submissions (id BIGSERIAL PRIMARY KEY, title VARCHAR(120) NOT NULL, category VARCHAR(60) NOT NULL, details VARCHAR(1500) NOT NULL DEFAULT '', poster_url TEXT NOT NULL DEFAULT '', submitter_name VARCHAR(80) NOT NULL DEFAULT '', contact_email VARCHAR(254) NOT NULL DEFAULT '', request_code VARCHAR(16) NOT NULL UNIQUE, status VARCHAR(12) NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'reviewing', 'approved', 'rejected')), email_sent BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
       await pool.query("ALTER TABLE series_submissions ALTER COLUMN request_code TYPE VARCHAR(16)");
       await pool.query("CREATE TABLE IF NOT EXISTS series_seasons (id BIGSERIAL PRIMARY KEY, series_id BIGINT NOT NULL REFERENCES content(id) ON DELETE CASCADE, season_number INTEGER NOT NULL CHECK (season_number > 0), title VARCHAR(100) NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(series_id, season_number))");
