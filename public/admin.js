@@ -2,7 +2,23 @@ const KEY_STORAGE = "cass-tv-admin-key";
 const form = document.getElementById("contentForm");
 const list = document.getElementById("contentList");
 const keyInput = document.getElementById("adminKey");
+const typeInput = document.getElementById("type");
+const streamInput = document.getElementById("stream");
+const streamHint = document.getElementById("streamHint");
 keyInput.value = sessionStorage.getItem(KEY_STORAGE) || "";
+
+function updateStreamHelp() {
+  const isLive = typeInput.value === "live";
+  streamInput.placeholder = isLive
+    ? "https://example.com/live/stream.m3u8"
+    : "https://example.com/video.mp4";
+  streamHint.textContent = isLive
+    ? "للبث المباشر استخدم رابط HLS بصيغة M3U8. روابط البث المباشر الحالية تبقى مدعومة كما هي."
+    : "للأفلام والمسلسلات استخدم رابط فيديو MP4 مباشر. روابط M3U8 مخصصة للبث المباشر.";
+}
+
+typeInput.addEventListener("change", updateStreamHelp);
+updateStreamHelp();
 
 function adminHeaders() {
   return { "Content-Type": "application/json", "x-admin-key": keyInput.value.trim() };
@@ -32,7 +48,7 @@ async function render() {
       const title = document.createElement("h3");
       title.textContent = item.title;
       const meta = document.createElement("p");
-      meta.textContent = item.type === "movie" ? "فيلم" : item.type === "series" ? "مسلسل" : "بث مباشر · يظهر في قائمة التشغيل";
+      meta.textContent = item.type === "movie" ? "فيلم · MP4" : item.type === "series" ? "مسلسل · MP4" : "بث مباشر · M3U8 · يظهر في قائمة التشغيل";
       details.append(title, meta);
       const remove = document.createElement("button");
       remove.type = "button";
@@ -61,7 +77,6 @@ async function render() {
     list.append(empty);
   }
 }
-
 
 async function renderRequests() {
   const requestList = document.getElementById("requestList");
@@ -149,12 +164,18 @@ form.addEventListener("submit", async event => {
   event.preventDefault();
   if (!keyInput.value.trim()) return showMessage("أدخل مفتاح الإدارة أولاً.");
   const payload = {
-    type: document.getElementById("type").value,
+    type: typeInput.value,
     title: document.getElementById("title").value.trim(),
     poster: document.getElementById("poster").value.trim(),
-    stream: document.getElementById("stream").value.trim(),
+    stream: streamInput.value.trim(),
     description: document.getElementById("description").value.trim()
   };
+  if (payload.type === "live" && !/\.m3u8(?:$|[?#])/i.test(payload.stream)) {
+    return showMessage("رابط البث المباشر يجب أن يكون بصيغة M3U8.");
+  }
+  if (payload.type !== "live" && !/\.mp4(?:$|[?#])/i.test(payload.stream)) {
+    return showMessage("رابط الفيلم أو المسلسل يجب أن يكون بصيغة MP4.");
+  }
   try {
     const response = await fetch("/api/content", {
       method: "POST", headers: adminHeaders(), body: JSON.stringify(payload)
@@ -163,6 +184,7 @@ form.addEventListener("submit", async event => {
     if (!response.ok) return showMessage(data.error || "تعذر حفظ المحتوى.");
     form.reset();
     keyInput.value = sessionStorage.getItem(KEY_STORAGE) || "";
+    updateStreamHelp();
     showMessage("تم حفظ المحتوى في قاعدة البيانات.");
     render();
   } catch {
@@ -171,7 +193,6 @@ form.addEventListener("submit", async event => {
 });
 
 document.getElementById("clearAll").addEventListener("click", render);
-document.getElementById("refreshRequests")?.addEventListener("click", renderRequests);
 document.getElementById("refreshRequests")?.addEventListener("click", renderRequests);
 
 render();
