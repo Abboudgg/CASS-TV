@@ -256,7 +256,7 @@ app.post("/api/series-submissions", requireDatabase, limitSeriesSubmissions, asy
   try {
     const duplicate = await pool.query("SELECT 1 FROM series_submissions WHERE lower(title) = lower($1) AND created_at > NOW() - INTERVAL '10 minutes' LIMIT 1", [title]);
     if (duplicate.rowCount) return res.status(409).json({ error: "وصلنا اقتراح بهذا الاسم مؤخراً. جرّب لاحقاً." });
-    const code = crypto.randomBytes(4).toString("hex").toUpperCase();
+    const code = crypto.randomBytes(8).toString("hex").toUpperCase();
     const inserted = await pool.query(
       "INSERT INTO series_submissions (title, category, details, poster_url, submitter_name, contact_email, request_code) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, title, request_code, status",
       [title, category, details, poster, submitter, email, code]
@@ -290,7 +290,7 @@ app.post("/api/series-submissions", requireDatabase, limitSeriesSubmissions, asy
 
 app.get("/api/series-submissions/track/:code", requireDatabase, async (req, res) => {
   const code = String(req.params.code || "").trim().toUpperCase();
-  if (!/^[A-F0-9]{8}$/.test(code)) return res.status(400).json({ error: "رقم الطلب غير صحيح." });
+  if (!/^[A-F0-9]{16}$/.test(code)) return res.status(400).json({ error: "رقم الطلب غير صحيح." });
   try {
     const result = await pool.query("SELECT request_code, title, status, created_at, updated_at FROM series_submissions WHERE request_code = $1", [code]);
     if (!result.rowCount) return res.status(404).json({ error: "لم نعثر على طلب بهذا الرقم." });
@@ -898,7 +898,8 @@ async function start() {
         "CREATE TABLE IF NOT EXISTS content (id BIGSERIAL PRIMARY KEY, type VARCHAR(10) NOT NULL CHECK (type IN ('movie', 'series')), title VARCHAR(100) NOT NULL, poster TEXT NOT NULL DEFAULT '', stream TEXT NOT NULL DEFAULT '', description VARCHAR(500) NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"
       );
       await pool.query("ALTER TABLE content ADD COLUMN IF NOT EXISTS category VARCHAR(60) NOT NULL DEFAULT 'عام'");
-      await pool.query("CREATE TABLE IF NOT EXISTS series_submissions (id BIGSERIAL PRIMARY KEY, title VARCHAR(120) NOT NULL, category VARCHAR(60) NOT NULL, details VARCHAR(1500) NOT NULL DEFAULT '', poster_url TEXT NOT NULL DEFAULT '', submitter_name VARCHAR(80) NOT NULL DEFAULT '', contact_email VARCHAR(254) NOT NULL DEFAULT '', request_code VARCHAR(8) NOT NULL UNIQUE, status VARCHAR(12) NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'reviewing', 'approved', 'rejected')), email_sent BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
+      await pool.query("CREATE TABLE IF NOT EXISTS series_submissions (id BIGSERIAL PRIMARY KEY, title VARCHAR(120) NOT NULL, category VARCHAR(60) NOT NULL, details VARCHAR(1500) NOT NULL DEFAULT '', poster_url TEXT NOT NULL DEFAULT '', submitter_name VARCHAR(80) NOT NULL DEFAULT '', contact_email VARCHAR(254) NOT NULL DEFAULT '', request_code VARCHAR(16) NOT NULL UNIQUE, status VARCHAR(12) NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'reviewing', 'approved', 'rejected')), email_sent BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())");
+      await pool.query("ALTER TABLE series_submissions ALTER COLUMN request_code TYPE VARCHAR(16)");
       await pool.query("CREATE TABLE IF NOT EXISTS series_seasons (id BIGSERIAL PRIMARY KEY, series_id BIGINT NOT NULL REFERENCES content(id) ON DELETE CASCADE, season_number INTEGER NOT NULL CHECK (season_number > 0), title VARCHAR(100) NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(series_id, season_number))");
       await pool.query("CREATE TABLE IF NOT EXISTS series_episodes (id BIGSERIAL PRIMARY KEY, season_id BIGINT NOT NULL REFERENCES series_seasons(id) ON DELETE CASCADE, episode_number INTEGER NOT NULL CHECK (episode_number > 0), title VARCHAR(120) NOT NULL, stream TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(season_id, episode_number))");
       await pool.query("ALTER TABLE content DROP CONSTRAINT IF EXISTS content_type_check");
