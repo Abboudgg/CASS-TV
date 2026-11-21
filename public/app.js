@@ -101,15 +101,78 @@ if (catalog && originalGrid) {
     const play = document.createElement("button");
     play.type = "button";
     play.className = "media-play";
-    play.textContent = "▶ تشغيل";
-    play.disabled = !streamUrl;
-    play.addEventListener("click", () => {
-      if (!streamUrl) return;
-      playerTitle.textContent = item.title || "CASS TV";
-      video.src = streamUrl;
-      if (typeof playerDialog.showModal === "function") playerDialog.showModal();
-      else playerDialog.setAttribute("open", "");
-      video.play().catch(() => {});
+    play.textContent = item.type === "series" ? "عرض المواسم والحلقات" : "▶ تشغيل";
+    play.disabled = item.type !== "series" && !streamUrl;
+    play.addEventListener("click", async () => {
+      if (item.type !== "series") {
+        if (!streamUrl) return;
+        playerTitle.textContent = item.title || "CASS TV";
+        video.src = streamUrl;
+        if (typeof playerDialog.showModal === "function") playerDialog.showModal();
+        else playerDialog.setAttribute("open", "");
+        video.play().catch(() => {});
+        return;
+      }
+      play.disabled = true;
+      play.textContent = "جارٍ تحميل الحلقات...";
+      try {
+        const response = await fetch("/api/series/" + encodeURIComponent(item.id) + "/seasons", { cache: "no-store" });
+        const seasons = await response.json();
+        if (!response.ok) throw new Error(seasons.error || "تعذر تحميل المواسم.");
+        const dialog = document.createElement("dialog");
+        dialog.className = "media-player-dialog series-dialog";
+        const close = document.createElement("button");
+        close.type = "button";
+        close.className = "player-close";
+        close.textContent = "إغلاق ✕";
+        close.addEventListener("click", () => dialog.close());
+        const heading = document.createElement("h3");
+        heading.textContent = item.title;
+        dialog.append(close, heading);
+        if (!seasons.length) {
+          const empty = document.createElement("p");
+          empty.className = "catalog-empty";
+          empty.textContent = "لم تتم إضافة مواسم لهذا المسلسل بعد.";
+          dialog.append(empty);
+        }
+        seasons.forEach(season => {
+          const section = document.createElement("section");
+          section.className = "series-season";
+          const title = document.createElement("h4");
+          title.textContent = "الموسم " + season.season_number + " · " + season.title;
+          section.append(title);
+          season.episodes.forEach(episode => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "episode-play";
+            button.textContent = "▶ الحلقة " + episode.episode_number + " · " + episode.title;
+            button.addEventListener("click", () => {
+              dialog.close();
+              playerTitle.textContent = item.title + " · " + episode.title;
+              video.src = safeHttpUrl(episode.stream);
+              if (typeof playerDialog.showModal === "function") playerDialog.showModal();
+              else playerDialog.setAttribute("open", "");
+              video.play().catch(() => {});
+            });
+            section.append(button);
+          });
+          if (!season.episodes.length) {
+            const empty = document.createElement("p");
+            empty.textContent = "لا توجد حلقات في هذا الموسم.";
+            section.append(empty);
+          }
+          dialog.append(section);
+        });
+        document.body.append(dialog);
+        dialog.addEventListener("close", () => dialog.remove(), { once: true });
+        if (typeof dialog.showModal === "function") dialog.showModal();
+        else dialog.setAttribute("open", "");
+      } catch (error) {
+        alert(error.message);
+      } finally {
+        play.disabled = false;
+        play.textContent = "عرض المواسم والحلقات";
+      }
     });
     info.append(play);
     card.append(info);
