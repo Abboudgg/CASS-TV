@@ -767,10 +767,10 @@ app.get("/series/:username/:password/:id.mp4", requireDatabase, async (req, res)
   try {
     const user = await findXtreamUser(req.params.username, req.params.password);
     if (!user) return res.status(401).send("Invalid username or password");
-    if (!/^\\d+$/.test(req.params.id)) return res.status(400).send("Invalid episode id");
+    if (!/^\d+$/.test(req.params.id)) return res.status(400).send("Invalid episode id");
     const result = await pool.query("SELECT stream FROM series_episodes WHERE id = $1", [req.params.id]);
     const stream = result.rows[0]?.stream;
-    if (!stream || !/^https?:\\/\\//i.test(stream)) return res.status(404).send("Episode stream not found");
+    if (!stream || !/^https?:\/\//i.test(stream)) return res.status(404).send("Episode stream not found");
     return res.redirect(302, stream);
   } catch (error) {
     console.error("Series episode playback failed:", error.message);
