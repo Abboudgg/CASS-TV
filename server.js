@@ -224,6 +224,12 @@ app.get("/auth/discord/callback", async (req, res) => {
     })).toString("base64url");
     const signature = signValue(payload);
     res.setHeader("Set-Cookie", "cass_admin_session=" + encodeURIComponent(payload + "." + signature) + ";" + adminCookieOptions(8 * 60 * 60));
+    console.log("[AUTH_DIAG] Discord callback accepted", JSON.stringify({
+      adminAllowed: allowed.includes(String(user.id)),
+      sessionCookieIssued: true,
+      forwardedProto: String(req.get("x-forwarded-proto") || "").split(",")[0].trim(),
+      cookieSameSite: (process.env.DISCORD_REDIRECT_URI || "").startsWith("https://") ? "None; Secure" : "Lax"
+    }));
     res.redirect("/admin?login=success");
   } catch (error) {
     console.error("Discord admin login failed:", error.message);
@@ -233,6 +239,11 @@ app.get("/auth/discord/callback", async (req, res) => {
 
 app.get("/api/auth/me", (req, res) => {
   const session = getAdminSession(req);
+  console.log("[AUTH_DIAG] /api/auth/me", JSON.stringify({
+    cookiePresent: Boolean(parseCookies(req).cass_admin_session),
+    sessionValid: Boolean(session),
+    forwardedProto: String(req.get("x-forwarded-proto") || "").split(",")[0].trim()
+  }));
   res.setHeader("Cache-Control", "no-store");
   res.json({ authenticated: Boolean(session), user: session ? { id: session.id, username: session.username } : null });
 });
@@ -246,7 +257,13 @@ app.get("/admin.html", (_req, res) => res.redirect(302, "/admin"));
 
 app.get("/admin", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  if (!getAdminSession(req)) return res.redirect(302, "/auth/discord");
+  const session = getAdminSession(req);
+  console.log("[AUTH_DIAG] /admin", JSON.stringify({
+    cookiePresent: Boolean(parseCookies(req).cass_admin_session),
+    sessionValid: Boolean(session),
+    forwardedProto: String(req.get("x-forwarded-proto") || "").split(",")[0].trim()
+  }));
+  if (!session) return res.redirect(302, "/auth/discord");
   res.sendFile(path.join(__dirname, "public", "admin.html"));
 });
 
