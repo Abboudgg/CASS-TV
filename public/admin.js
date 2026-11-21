@@ -187,7 +187,7 @@ keyInput.addEventListener("change", () => {
 
 form.addEventListener("submit", async event => {
   event.preventDefault();
-  if (!keyInput.value.trim()) return showMessage("أدخل مفتاح الإدارة أولاً.");
+  if (!keyInput.value.trim() && !discordAuthenticated) return showMessage("سجّل الدخول بديسكورد أو أدخل مفتاح الإدارة.");
   const payload = {
     type: typeInput.value,
     title: document.getElementById("title").value.trim(),
@@ -227,8 +227,7 @@ form.addEventListener("submit", async event => {
 document.getElementById("clearAll").addEventListener("click", render);
 document.getElementById("refreshRequests")?.addEventListener("click", renderRequests);
 
-render();
-renderRequests();
+refreshAdminAuth().then(() => { render(); renderRequests(); renderSeriesSubmissions(); });
 
 
 // Seasons and episodes manager
