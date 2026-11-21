@@ -125,3 +125,15 @@ h1 span { color: #e5a2b8; }
 .series-submit-form .primary-button { justify-self: start; border: 0; cursor: pointer; font: inherit; }
 .form-note { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
 @media (max-width: 600px) { .series-submit-form { grid-template-columns: 1fr; } }
+
+
+/* Series suggestion tracking */
+.trap-field { position:absolute !important; width:1px !important; height:1px !important; overflow:hidden !important; clip:rect(0,0,0,0) !important; white-space:nowrap !important; }
+.series-submit-form button:disabled { opacity:.55; cursor:wait; }
+.track-box { max-width:760px; margin-top:30px; padding:22px; border:1px solid #d98aa533; border-radius:15px; background:#21071199; }
+.track-box h3 { margin:0 0 8px; }
+.track-box p { color:var(--muted); font-size:13px; }
+.track-form { display:flex; gap:10px; flex-wrap:wrap; }
+.track-form input { flex:1; min-width:180px; border:1px solid #d98aa544; border-radius:10px; padding:12px; color:#fff7fa; background:#210711; font:inherit; }
+.track-form button { border:0; border-radius:10px; padding:12px 20px; color:white; background:var(--accent); font:inherit; cursor:pointer; }
+.track-result { margin-top:14px; color:#f2c4d3; line-height:1.8; overflow-wrap:anywhere; }
