@@ -90,6 +90,10 @@ if (catalog && originalGrid) {
     const title = document.createElement("h4");
     title.textContent = item.title || "بدون عنوان";
     info.append(title);
+    const category = document.createElement("small");
+    category.className = "media-category";
+    category.textContent = item.category || "عام";
+    info.append(category);
 
     if (item.description) {
       const description = document.createElement("p");
