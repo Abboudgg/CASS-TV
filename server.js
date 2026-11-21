@@ -39,7 +39,11 @@ function parseCookies(req) {
   const result = {};
   for (const part of String(req.headers.cookie || "").split(";")) {
     const index = part.indexOf("=");
-    if (index > 0) result[part.slice(0, index).trim()] = decodeURIComponent(part.slice(index + 1).trim());
+    if (index <= 0) continue;
+    const key = part.slice(0, index).trim();
+    const raw = part.slice(index + 1).trim();
+    try { result[key] = decodeURIComponent(raw); }
+    catch (_error) { result[key] = raw; }
   }
   return result;
 }
@@ -156,7 +160,9 @@ function serverInfo(req) {
 
 function adminCookieOptions(maxAge) {
   const secure = (process.env.DISCORD_REDIRECT_URI || "").startsWith("https://");
-  return "Path=/; HttpOnly; SameSite=Lax; Max-Age=" + maxAge + (secure ? "; Secure" : "");
+  // Discord OAuth returns from another site; None+Secure is reliable for the
+  // cross-site callback on Safari/iOS while retaining Lax for local HTTP.
+  return "Path=/; HttpOnly; SameSite=" + (secure ? "None; Secure" : "Lax") + "; Max-Age=" + maxAge;
 }
 
 app.get("/auth/discord", (req, res) => {
@@ -185,7 +191,8 @@ app.get("/auth/discord/callback", async (req, res) => {
     res.setHeader("Set-Cookie", "cass_oauth_state=; " + adminCookieOptions(0));
     return res.status(400).send("OAuth state validation failed. Please try logging in again.");
   }
-  res.setHeader("Set-Cookie", "cass_oauth_state=; " + adminCookieOptions(0));
+  // Clear the one-time OAuth state cookie without replacing other cookies.
+  res.append("Set-Cookie", "cass_oauth_state=; " + adminCookieOptions(0));
   if (req.query.error || !req.query.code) return res.redirect("/admin?login=cancelled");
   try {
     const tokenResponse = await fetch("https://discord.com/api/v10/oauth2/token", {
