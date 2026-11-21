@@ -5,6 +5,7 @@ const keyInput = document.getElementById("adminKey");
 const typeInput = document.getElementById("type");
 const streamInput = document.getElementById("stream");
 const streamHint = document.getElementById("streamHint");
+const categoryInput = document.getElementById("category");
 keyInput.value = sessionStorage.getItem(KEY_STORAGE) || "";
 
 function updateStreamHelp() {
@@ -48,7 +49,7 @@ async function render() {
       const title = document.createElement("h3");
       title.textContent = item.title;
       const meta = document.createElement("p");
-      meta.textContent = item.type === "movie" ? "فيلم · MP4" : item.type === "series" ? "مسلسل · MP4" : "بث مباشر · M3U8 · يظهر في قائمة التشغيل";
+      meta.textContent = (item.type === "movie" ? "فيلم" : item.type === "series" ? "مسلسل" : "بث مباشر") + " · " + (item.category || "عام") + (item.type === "live" ? " · M3U8 · يظهر في قائمة التشغيل" : "");
       details.append(title, meta);
       const remove = document.createElement("button");
       remove.type = "button";
@@ -167,6 +168,7 @@ form.addEventListener("submit", async event => {
     type: typeInput.value,
     title: document.getElementById("title").value.trim(),
     poster: document.getElementById("poster").value.trim(),
+    category: categoryInput.value.trim() || "عام",
     stream: streamInput.value.trim(),
     description: document.getElementById("description").value.trim()
   };
