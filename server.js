@@ -287,7 +287,7 @@ async function notifyDiscordNewContent(item) {
     "تابعوه الآن: https://casstv.onrender.com/",
     "",
     "<@&" + DISCORD_ROLE_ID + ">"
-  ].join("\\n");
+  ].join("\n");
 
   try {
     const response = await fetch("https://discord.com/api/v10/channels/" + DISCORD_CHANNEL_ID + "/messages", {
@@ -311,6 +311,56 @@ async function notifyDiscordNewContent(item) {
     console.error("Discord notification error:", error.message);
   }
 }
+
+
+async function checkDiscordBot() {
+  const token = process.env.DISCORD_BOT_TOKEN || "";
+  if (!token) {
+    console.log("Discord bot: DISCORD_BOT_TOKEN is missing");
+    return;
+  }
+  try {
+    const response = await fetch("https://discord.com/api/v10/users/@me", {
+      headers: { Authorization: "Bot " + token },
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!response.ok) {
+      console.error("Discord bot authentication failed:", response.status, (await response.text()).slice(0, 300));
+      return;
+    }
+    const bot = await response.json();
+    console.log("Discord bot connected:", bot.username + " (" + bot.id + ")");
+  } catch (error) {
+    console.error("Discord bot connection error:", error.message);
+  }
+}
+
+app.post("/api/admin/discord-test", requireAdmin, async (_req, res) => {
+  const token = process.env.DISCORD_BOT_TOKEN || "";
+  if (!token) return res.status(503).json({ error: "DISCORD_BOT_TOKEN غير مضبوط." });
+  const message = "اختبار بوت CASS TV: الاتصال يعمل بنجاح.";
+  try {
+    const response = await fetch("https://discord.com/api/v10/channels/" + DISCORD_CHANNEL_ID + "/messages", {
+      method: "POST",
+      headers: {
+        Authorization: "Bot " + token,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ content: message }),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!response.ok) {
+      const details = (await response.text()).slice(0, 500);
+      console.error("Discord test message failed:", response.status, details);
+      return res.status(502).json({ error: "فشل إرسال اختبار Discord.", status: response.status });
+    }
+    console.log("Discord test message sent to CASS TV channel");
+    return res.json({ success: true, message: "تم إرسال رسالة الاختبار إلى روم CASS TV." });
+  } catch (error) {
+    console.error("Discord test message error:", error.message);
+    return res.status(502).json({ error: "تعذر الاتصال بديسكورد." });
+  }
+});
 
 app.post("/api/content", requireDatabase, requireAdmin, async (req, res) => {
   const { type, title, poster = "", stream = "", teaser_url = "", description = "", category = "عام" } = req.body || {};
@@ -1063,6 +1113,7 @@ app.get("/{*splat}", (_req, res) => {
 });
 
 async function start() {
+  await checkDiscordBot();
   if (pool) {
     try {
       await pool.query(
