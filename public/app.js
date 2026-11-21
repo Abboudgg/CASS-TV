@@ -44,6 +44,55 @@ if (catalog && originalGrid) {
   playerDialog.append(playerClose, playerTitle, video);
   document.body.append(playerDialog);
 
+  const teasersSection = document.createElement("section");
+  teasersSection.className = "content-section teaser-section";
+  teasersSection.id = "trailers";
+  const teaserHeading = document.createElement("div");
+  teaserHeading.className = "section-heading";
+  teaserHeading.innerHTML = '<div><span class="eyebrow">COMING SOON</span><h2>تشويقات الأفلام</h2><p>شاهد الإعلان قبل اختيار الفيلم.</p></div>';
+  const teaserGrid = document.createElement("div");
+  teaserGrid.className = "teaser-grid";
+  teasersSection.append(teaserHeading, teaserGrid);
+  document.querySelector(".hero")?.after(teasersSection);
+
+  function makeTeaserCard(item) {
+    const card = document.createElement("article");
+    card.className = "teaser-card";
+    const posterUrl = safeHttpUrl(item.poster);
+    if (posterUrl) {
+      const poster = document.createElement("img");
+      poster.src = posterUrl;
+      poster.alt = "غلاف " + item.title;
+      poster.loading = "lazy";
+      card.append(poster);
+    } else {
+      const placeholder = document.createElement("div");
+      placeholder.className = "teaser-poster-empty";
+      placeholder.textContent = "🎬";
+      card.append(placeholder);
+    }
+    const info = document.createElement("div");
+    info.className = "teaser-info";
+    const title = document.createElement("h3");
+    title.textContent = item.title;
+    const category = document.createElement("small");
+    category.textContent = item.category || "عام";
+    const watch = document.createElement("button");
+    watch.type = "button";
+    watch.className = "media-play";
+    watch.textContent = "▶ مشاهدة التشويقة";
+    watch.addEventListener("click", () => {
+      playerTitle.textContent = "تشويقة · " + item.title;
+      video.src = safeHttpUrl(item.teaser_url);
+      if (typeof playerDialog.showModal === "function") playerDialog.showModal();
+      else playerDialog.setAttribute("open", "");
+      video.play().catch(() => {});
+    });
+    info.append(title, category, watch);
+    card.append(info);
+    return card;
+  }
+
   function closePlayer() {
     video.pause();
     video.removeAttribute("src");
@@ -195,6 +244,14 @@ if (catalog && originalGrid) {
 
       const movies = items.filter(item => item.type === "movie");
       const series = items.filter(item => item.type === "series");
+      const teasers = movies.filter(item => safeHttpUrl(item.teaser_url));
+      teaserGrid.replaceChildren(...teasers.map(makeTeaserCard));
+      if (!teasers.length) {
+        const emptyTeasers = document.createElement("p");
+        emptyTeasers.className = "catalog-empty";
+        emptyTeasers.textContent = "ستظهر هنا تشويقات الأفلام التي تضيفها من لوحة التحكم.";
+        teaserGrid.append(emptyTeasers);
+      }
       moviesGrid.replaceChildren(...movies.map(makeCard));
       seriesGrid.replaceChildren(...series.map(makeCard));
 
