@@ -160,9 +160,9 @@ function serverInfo(req) {
 
 function adminCookieOptions(maxAge) {
   const secure = (process.env.DISCORD_REDIRECT_URI || "").startsWith("https://");
-  // Discord OAuth returns from another site; None+Secure is reliable for the
-  // cross-site callback on Safari/iOS while retaining Lax for local HTTP.
-  return "Path=/; HttpOnly; SameSite=" + (secure ? "None; Secure" : "Lax") + "; Max-Age=" + maxAge;
+  // OAuth callback is a top-level GET navigation, so Lax is sufficient and
+  // avoids relying on cross-site None cookies in Safari/iOS.
+  return "Path=/; HttpOnly; SameSite=Lax" + (secure ? "; Secure" : "") + "; Max-Age=" + maxAge;
 }
 
 app.get("/auth/discord", (req, res) => {
@@ -187,7 +187,15 @@ app.get("/auth/discord", (req, res) => {
 app.get("/auth/discord/callback", async (req, res) => {
   const cookies = parseCookies(req);
   const state = String(req.query.state || "");
-  if (!state || !cookies.cass_oauth_state || !safeEqualText(state, cookies.cass_oauth_state)) {
+  const stateMatches = Boolean(state && cookies.cass_oauth_state && safeEqualText(state, cookies.cass_oauth_state));
+  if (!stateMatches) {
+    console.warn("[AUTH_DIAG] OAuth state validation failed", JSON.stringify({
+      queryStatePresent: Boolean(state),
+      stateCookiePresent: Boolean(cookies.cass_oauth_state),
+      queryStateLength: state.length,
+      cookieStateLength: String(cookies.cass_oauth_state || "").length,
+      forwardedProto: String(req.get("x-forwarded-proto") || "").split(",")[0].trim()
+    }));
     res.setHeader("Set-Cookie", "cass_oauth_state=; " + adminCookieOptions(0));
     return res.status(400).send("OAuth state validation failed. Please try logging in again.");
   }
