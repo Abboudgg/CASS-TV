@@ -197,3 +197,77 @@ document.getElementById("refreshRequests")?.addEventListener("click", renderRequ
 
 render();
 renderRequests();
+
+
+// Seasons and episodes manager
+const seriesSelect = document.getElementById("seriesSelect");
+const episodeSeason = document.getElementById("episodeSeason");
+const seasonOverview = document.getElementById("seasonOverview");
+async function loadSeriesManager() {
+  try {
+    const response = await fetch("/api/content", { cache: "no-store" });
+    const items = await response.json();
+    const series = items.filter(item => item.type === "series");
+    seriesSelect.replaceChildren();
+    if (!series.length) {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "لا توجد مسلسلات؛ أضف مسلسلاً أولاً";
+      seriesSelect.append(option);
+      episodeSeason.replaceChildren(new Option("أضف موسماً أولاً", ""));
+      seasonOverview.textContent = "";
+      return;
+    }
+    series.forEach(item => seriesSelect.add(new Option(item.title, item.id)));
+    await loadSeasonOptions();
+  } catch (_error) {
+    seriesSelect.replaceChildren(new Option("تعذر تحميل المسلسلات", ""));
+  }
+}
+async function loadSeasonOptions() {
+  const id = seriesSelect.value;
+  episodeSeason.replaceChildren(new Option("اختر موسماً", ""));
+  seasonOverview.replaceChildren();
+  if (!id) return;
+  try {
+    const response = await fetch("/api/series/" + encodeURIComponent(id) + "/seasons");
+    const seasons = await response.json();
+    if (!response.ok) throw new Error(seasons.error || "تعذر تحميل المواسم.");
+    seasons.forEach(season => {
+      episodeSeason.add(new Option("الموسم " + season.season_number + " · " + season.title, season.id));
+      const row = document.createElement("article");
+      row.className = "entry";
+      const detail = document.createElement("div");
+      const heading = document.createElement("h3");
+      heading.textContent = "الموسم " + season.season_number + " · " + season.title;
+      const meta = document.createElement("p");
+      meta.textContent = season.episodes.length + " حلقة";
+      detail.append(heading, meta);
+      row.append(detail);
+      seasonOverview.append(row);
+    });
+    if (!seasons.length) seasonOverview.textContent = "لم تتم إضافة مواسم لهذا المسلسل بعد.";
+  } catch (error) {
+    seasonOverview.textContent = error.message;
+  }
+}
+seriesSelect.addEventListener("change", loadSeasonOptions);
+document.getElementById("addSeason").addEventListener("click", async () => {
+  const id = seriesSelect.value;
+  if (!id || !keyInput.value.trim()) return document.getElementById("seasonMessage").textContent = "اختر مسلسلاً وأدخل مفتاح الإدارة.";
+  const payload = { season_number: Number(document.getElementById("seasonNumber").value), title: document.getElementById("seasonTitle").value.trim() };
+  const response = await fetch("/api/series/" + encodeURIComponent(id) + "/seasons", { method: "POST", headers: adminHeaders(), body: JSON.stringify(payload) });
+  const data = await response.json().catch(() => ({}));
+  document.getElementById("seasonMessage").textContent = response.ok ? "تمت إضافة الموسم." : (data.error || "تعذرت إضافة الموسم.");
+  if (response.ok) { document.getElementById("seasonTitle").value = ""; await loadSeasonOptions(); }
+});
+document.getElementById("addEpisode").addEventListener("click", async () => {
+  const id = episodeSeason.value;
+  if (!id || !keyInput.value.trim()) return document.getElementById("episodeMessage").textContent = "اختر موسماً وأدخل مفتاح الإدارة.";
+  const payload = { episode_number: Number(document.getElementById("episodeNumber").value), title: document.getElementById("episodeTitle").value.trim(), stream: document.getElementById("episodeStream").value.trim() };
+  const response = await fetch("/api/seasons/" + encodeURIComponent(id) + "/episodes", { method: "POST", headers: adminHeaders(), body: JSON.stringify(payload) });
+  const data = await response.json().catch(() => ({}));
+  document.getElementById("episodeMessage").textContent = response.ok ? "تمت إضافة الحلقة." : (data.error || "تعذرت إضافة الحلقة.");
+  if (response.ok) { document.getElementById("episodeTitle").value = ""; document.getElementById("episodeStream").value = ""; await loadSeasonOptions(); }
+});
+
