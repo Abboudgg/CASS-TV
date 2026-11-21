@@ -31,6 +31,8 @@ if (catalog && originalGrid) {
   catalog.append(moviesSection, seriesSection);
 
   const playerDialog = document.createElement("dialog");
+  let currentPlaylist = [];
+  let currentPlaylistIndex = -1;
   playerDialog.className = "media-player-dialog";
   const playerClose = document.createElement("button");
   playerClose.type = "button";
@@ -154,11 +156,13 @@ if (catalog && originalGrid) {
     const play = document.createElement("button");
     play.type = "button";
     play.className = "media-play";
-    play.textContent = item.type === "series" ? "عرض المواسم والحلقات" : "▶ تشغيل";
+    play.textContent = item.type === "series" ? "▶ قائمة تشغيل الحلقات" : "▶ تشغيل";
     play.disabled = item.type !== "series" && !streamUrl;
     play.addEventListener("click", async () => {
       if (item.type !== "series") {
         if (!streamUrl) return;
+        currentPlaylist = [];
+        currentPlaylistIndex = -1;
         playerTitle.textContent = item.title || "CASS TV";
         video.src = streamUrl;
         if (typeof playerDialog.showModal === "function") playerDialog.showModal();
@@ -166,12 +170,21 @@ if (catalog && originalGrid) {
         video.play().catch(() => {});
         return;
       }
+
       play.disabled = true;
-      play.textContent = "جارٍ تحميل الحلقات...";
+      play.textContent = "جارٍ تحميل قائمة التشغيل...";
       try {
         const response = await fetch("/api/series/" + encodeURIComponent(item.id) + "/seasons", { cache: "no-store" });
         const seasons = await response.json();
-        if (!response.ok) throw new Error(seasons.error || "تعذر تحميل المواسم.");
+        if (!response.ok) throw new Error(seasons.error || "تعذر تحميل حلقات المسلسل.");
+
+        const episodes = seasons.flatMap(season =>
+          (Array.isArray(season.episodes) ? season.episodes : []).map(episode => ({
+            ...episode,
+            season_number: season.season_number
+          }))
+        );
+
         const dialog = document.createElement("dialog");
         dialog.className = "media-player-dialog series-dialog";
         const close = document.createElement("button");
@@ -179,43 +192,36 @@ if (catalog && originalGrid) {
         close.className = "player-close";
         close.textContent = "إغلاق ✕";
         close.addEventListener("click", () => dialog.close());
+
         const heading = document.createElement("h3");
-        heading.textContent = item.title;
+        heading.textContent = "قائمة تشغيل · " + item.title;
         dialog.append(close, heading);
-        if (!seasons.length) {
+
+        if (!episodes.length) {
           const empty = document.createElement("p");
           empty.className = "catalog-empty";
-          empty.textContent = "لم تتم إضافة مواسم لهذا المسلسل بعد.";
+          empty.textContent = "لم تتم إضافة حلقات لهذا المسلسل بعد.";
           dialog.append(empty);
-        }
-        seasons.forEach(season => {
-          const section = document.createElement("section");
-          section.className = "series-season";
-          const title = document.createElement("h4");
-          title.textContent = "الموسم " + season.season_number + " · " + season.title;
-          section.append(title);
-          season.episodes.forEach(episode => {
+        } else {
+          const list = document.createElement("div");
+          list.className = "series-playlist";
+          episodes.forEach((episode, index) => {
             const button = document.createElement("button");
             button.type = "button";
             button.className = "episode-play";
-            button.textContent = "▶ الحلقة " + episode.episode_number + " · " + episode.title;
+            button.textContent = "▶ الموسم " + episode.season_number +
+              " · الحلقة " + episode.episode_number + " · " + episode.title;
             button.addEventListener("click", () => {
+              currentPlaylist = episodes;
+              currentPlaylistIndex = index;
               dialog.close();
-              playerTitle.textContent = item.title + " · " + episode.title;
-              video.src = safeHttpUrl(episode.stream);
-              if (typeof playerDialog.showModal === "function") playerDialog.showModal();
-              else playerDialog.setAttribute("open", "");
-              video.play().catch(() => {});
+              playPlaylistEpisode(item);
             });
-            section.append(button);
+            list.append(button);
           });
-          if (!season.episodes.length) {
-            const empty = document.createElement("p");
-            empty.textContent = "لا توجد حلقات في هذا الموسم.";
-            section.append(empty);
-          }
-          dialog.append(section);
-        });
+          dialog.append(list);
+        }
+
         document.body.append(dialog);
         dialog.addEventListener("close", () => dialog.remove(), { once: true });
         if (typeof dialog.showModal === "function") dialog.showModal();
@@ -224,13 +230,33 @@ if (catalog && originalGrid) {
         alert(error.message);
       } finally {
         play.disabled = false;
-        play.textContent = "عرض المواسم والحلقات";
+        play.textContent = "▶ قائمة تشغيل الحلقات";
       }
     });
     info.append(play);
     card.append(info);
     return card;
   }
+
+  function playPlaylistEpisode(seriesItem) {
+    const episode = currentPlaylist[currentPlaylistIndex];
+    if (!episode) return;
+    playerTitle.textContent = seriesItem.title + " · الموسم " +
+      episode.season_number + " · الحلقة " + episode.episode_number + " · " + episode.title;
+    video.src = safeHttpUrl(episode.stream);
+    if (typeof playerDialog.showModal === "function" && !playerDialog.open) playerDialog.showModal();
+    else if (!playerDialog.open) playerDialog.setAttribute("open", "");
+    video.play().catch(() => {});
+  }
+
+  video.addEventListener("ended", () => {
+    if (currentPlaylistIndex < 0 || currentPlaylistIndex >= currentPlaylist.length - 1) return;
+    currentPlaylistIndex += 1;
+    const episode = currentPlaylist[currentPlaylistIndex];
+    playerTitle.textContent = "الحلقة التالية · " + episode.title;
+    video.src = safeHttpUrl(episode.stream);
+    video.play().catch(() => {});
+  });
 
   async function loadCatalog() {
     try {
