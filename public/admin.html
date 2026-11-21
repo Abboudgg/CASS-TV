@@ -52,6 +52,28 @@
       </form>
     </section>
 
+
+    <section class="panel" id="seriesManager">
+      <div class="panel-head"><div><span class="tag">SERIES MANAGER</span><h2>إدارة المواسم والحلقات</h2></div></div>
+      <p class="hint">اختر مسلسلاً موجوداً، ثم أضف مواسمه وحلقاته. لن تحتاج إلى إعادة إضافة المسلسل.</p>
+      <div class="form-grid">
+        <label class="wide">المسلسل<select id="seriesSelect"><option value="">تحميل المسلسلات...</option></select></label>
+        <label>رقم الموسم<input id="seasonNumber" type="number" min="1" max="100" value="1"></label>
+        <label>اسم الموسم<input id="seasonTitle" maxlength="100" placeholder="الموسم الأول"></label>
+      </div>
+      <button id="addSeason" type="button">＋ إضافة الموسم</button>
+      <p id="seasonMessage" role="status"></p>
+      <div class="form-grid">
+        <label class="wide">الموسم لإضافة الحلقة<select id="episodeSeason"><option value="">اختر موسماً</option></select></label>
+        <label>رقم الحلقة<input id="episodeNumber" type="number" min="1" value="1"></label>
+        <label>اسم الحلقة<input id="episodeTitle" maxlength="120" placeholder="الحلقة الأولى"></label>
+        <label class="wide">رابط MP4 للحلقة<input id="episodeStream" type="url" placeholder="https://example.com/episode.mp4"></label>
+      </div>
+      <button id="addEpisode" type="button">＋ إضافة الحلقة</button>
+      <p id="episodeMessage" role="status"></p>
+      <div id="seasonOverview" class="content-list"></div>
+    </section>
+
     <section class="panel" id="requests">
       <div class="panel-head"><div><span class="tag">ACCOUNT APPROVALS</span><h2>طلبات تسجيل Xtream</h2></div><button class="clear" id="refreshRequests" type="button">تحديث الطلبات</button></div>
       <p class="hint">أدخل مفتاح الإدارة أعلاه لمراجعة الطلبات. اختر مدة الاشتراك عند الموافقة.</p>
