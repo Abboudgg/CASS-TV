@@ -173,8 +173,11 @@ form.addEventListener("submit", async event => {
   if (payload.type === "live" && !/\.m3u8(?:$|[?#])/i.test(payload.stream)) {
     return showMessage("رابط البث المباشر يجب أن يكون بصيغة M3U8.");
   }
-  if (payload.type !== "live" && !/\.mp4(?:$|[?#])/i.test(payload.stream)) {
-    return showMessage("رابط الفيلم أو المسلسل يجب أن يكون بصيغة MP4.");
+  if (payload.type === "movie" && !/\.mp4(?:$|[?#])/i.test(payload.stream)) {
+    return showMessage("رابط الفيلم يجب أن يكون بصيغة MP4.");
+  }
+  if (payload.type === "series" && payload.stream && !/\.mp4(?:$|[?#])/i.test(payload.stream)) {
+    return showMessage("إذا أضفت رابطاً للمسلسل فيجب أن يكون MP4؛ ويمكنك تركه فارغاً وإضافة الحلقات من قسم إدارة المواسم.");
   }
   try {
     const response = await fetch("/api/content", {
