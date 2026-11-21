@@ -28,13 +28,49 @@ const pool = process.env.DATABASE_URL
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
+function parseCookies(req) {
+  const result = {};
+  for (const part of String(req.headers.cookie || "").split(";")) {
+    const index = part.indexOf("=");
+    if (index > 0) result[part.slice(0, index).trim()] = decodeURIComponent(part.slice(index + 1).trim());
+  }
+  return result;
+}
+
+function signValue(value) {
+  return crypto.createHmac("sha256", process.env.SESSION_SECRET || "").update(value).digest("base64url");
+}
+
+function safeEqualText(left, right) {
+  const a = Buffer.from(String(left || ""));
+  const b = Buffer.from(String(right || ""));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function getAdminSession(req) {
+  const secret = process.env.SESSION_SECRET || "";
+  if (secret.length < 32) return null;
+  const token = parseCookies(req).cass_admin_session || "";
+  const parts = token.split(".");
+  if (parts.length !== 2) return null;
+  const [payload, signature] = parts;
+  if (!safeEqualText(signValue(payload), signature)) return null;
+  try {
+    const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    const allowed = String(process.env.DISCORD_ADMIN_IDS || "").split(",").map(x => x.trim()).filter(Boolean);
+    if (!data.id || !Number.isFinite(data.exp) || data.exp < Date.now() || !allowed.includes(String(data.id))) return null;
+    return { id: String(data.id), username: String(data.username || "Discord Admin") };
+  } catch (_error) { return null; }
+}
+
 function requireAdmin(req, res, next) {
+  if (getAdminSession(req)) return next();
   const expected = process.env.ADMIN_API_KEY || "";
   const supplied = req.get("x-admin-key") || "";
   const a = Buffer.from(expected);
   const b = Buffer.from(supplied);
   if (!expected || a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
-    return res.status(401).json({ error: "مفتاح الإدارة غير صحيح أو غير مضبوط." });
+    return res.status(401).json({ error: "سجّل الدخول بديسكورد أو أدخل مفتاح الإدارة." });
   }
   next();
 }
@@ -110,6 +146,87 @@ function serverInfo(req) {
     time_now: new Date().toISOString().replace("T", " ").slice(0, 19)
   };
 }
+
+function adminCookieOptions(maxAge) {
+  const secure = (process.env.DISCORD_REDIRECT_URI || "").startsWith("https://");
+  return "Path=/; HttpOnly; SameSite=Lax; Max-Age=" + maxAge + (secure ? "; Secure" : "");
+}
+
+app.get("/auth/discord", (req, res) => {
+  const clientId = process.env.DISCORD_CLIENT_ID || "";
+  const redirectUri = process.env.DISCORD_REDIRECT_URI || "";
+  if (!clientId || !redirectUri || !process.env.DISCORD_CLIENT_SECRET || !process.env.SESSION_SECRET || String(process.env.SESSION_SECRET).length < 32 || !String(process.env.DISCORD_ADMIN_IDS || "").trim()) {
+    return res.status(503).send("Discord admin login is not configured. Set the required Render environment variables.");
+  }
+  const state = crypto.randomBytes(24).toString("base64url");
+  res.setHeader("Set-Cookie", "cass_oauth_state=" + encodeURIComponent(state) + ";" + adminCookieOptions(600));
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: "identify",
+    state,
+    prompt: "consent"
+  });
+  res.redirect("https://discord.com/oauth2/authorize?" + params.toString());
+});
+
+app.get("/auth/discord/callback", async (req, res) => {
+  const cookies = parseCookies(req);
+  const state = String(req.query.state || "");
+  if (!state || !cookies.cass_oauth_state || !safeEqualText(state, cookies.cass_oauth_state)) {
+    res.setHeader("Set-Cookie", "cass_oauth_state=; " + adminCookieOptions(0));
+    return res.status(400).send("OAuth state validation failed. Please try logging in again.");
+  }
+  res.setHeader("Set-Cookie", "cass_oauth_state=; " + adminCookieOptions(0));
+  if (req.query.error || !req.query.code) return res.redirect("/admin?login=cancelled");
+  try {
+    const tokenResponse = await fetch("https://discord.com/api/v10/oauth2/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: process.env.DISCORD_CLIENT_ID || "",
+        client_secret: process.env.DISCORD_CLIENT_SECRET || "",
+        grant_type: "authorization_code",
+        code: String(req.query.code),
+        redirect_uri: process.env.DISCORD_REDIRECT_URI || ""
+      }),
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!tokenResponse.ok) throw new Error("Discord token exchange failed");
+    const tokenData = await tokenResponse.json();
+    const userResponse = await fetch("https://discord.com/api/v10/users/@me", {
+      headers: { Authorization: "Bearer " + tokenData.access_token },
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!userResponse.ok) throw new Error("Discord identity lookup failed");
+    const user = await userResponse.json();
+    const allowed = String(process.env.DISCORD_ADMIN_IDS || "").split(",").map(x => x.trim()).filter(Boolean);
+    if (!allowed.includes(String(user.id))) return res.redirect("/admin?login=denied");
+    const payload = Buffer.from(JSON.stringify({
+      id: String(user.id),
+      username: String(user.username || "Discord Admin"),
+      exp: Date.now() + 8 * 60 * 60 * 1000
+    })).toString("base64url");
+    const signature = signValue(payload);
+    res.setHeader("Set-Cookie", "cass_admin_session=" + encodeURIComponent(payload + "." + signature) + ";" + adminCookieOptions(8 * 60 * 60));
+    res.redirect("/admin?login=success");
+  } catch (error) {
+    console.error("Discord admin login failed:", error.message);
+    res.redirect("/admin?login=error");
+  }
+});
+
+app.get("/api/auth/me", (req, res) => {
+  const session = getAdminSession(req);
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ authenticated: Boolean(session), user: session ? { id: session.id, username: session.username } : null });
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  res.setHeader("Set-Cookie", "cass_admin_session=; " + adminCookieOptions(0));
+  res.json({ success: true });
+});
 
 app.get("/admin", (_req, res) => {
   res.sendFile(path.join(__dirname, "public", "admin.html"));
