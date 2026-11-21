@@ -23,7 +23,7 @@
   <main class="main">
     <header class="top">
       <div><span class="muted">CASS TV / الإدارة</span><h1>لوحة التحكم</h1></div>
-      <a class="site-link" href="/">زيارة الموقع ↗</a>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span id="authUser" class="muted">غير مسجل الدخول</span><button id="discordLogin" type="button">تسجيل الدخول بديسكورد</button><button id="discordLogout" type="button" hidden>تسجيل الخروج</button><a class="site-link" href="/">زيارة الموقع ↗</a></div>
     </header>
 
     <section class="welcome">
@@ -39,7 +39,7 @@
 
     <section class="panel" id="add">
       <div class="panel-head"><div><span class="tag">CONTENT MANAGER</span><h2>إضافة محتوى</h2></div></div>
-      <div class="key-row"><label for="adminKey">مفتاح الإدارة (ADMIN_API_KEY)</label><input id="adminKey" type="password" autocomplete="off" placeholder="أدخل مفتاح الإدارة الذي ستضبطه في الاستضافة"></div><form id="contentForm">
+      <div class="key-row"><label for="adminKey">دخول احتياطي بمفتاح الإدارة (اختياري)</label><input id="adminKey" type="password" autocomplete="off" placeholder="يمكنك تسجيل الدخول بديسكورد بدلاً منه"></div><form id="contentForm">
         <div class="form-grid">
           <label>نوع المحتوى<select id="type"><option value="movie">فيلم</option><option value="series">مسلسل</option><option value="live">بث مباشر</option></select></label>
           <label>اسم المحتوى<input id="title" required maxlength="100" placeholder="اكتب اسم الفيلم أو المسلسل"></label>
