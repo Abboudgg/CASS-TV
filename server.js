@@ -228,7 +228,11 @@ app.post("/api/auth/logout", (req, res) => {
   res.json({ success: true });
 });
 
-app.get("/admin", (_req, res) => {
+app.get("/admin.html", (_req, res) => res.redirect(302, "/admin"));
+
+app.get("/admin", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!getAdminSession(req)) return res.redirect(302, "/auth/discord");
   res.sendFile(path.join(__dirname, "public", "admin.html"));
 });
 
