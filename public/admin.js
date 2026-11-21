@@ -7,6 +7,29 @@ const streamInput = document.getElementById("stream");
 const streamHint = document.getElementById("streamHint");
 const categoryInput = document.getElementById("category");
 const teaserInput = document.getElementById("teaser");
+let discordAuthenticated = false;
+
+async function refreshAdminAuth() {
+  try {
+    const response = await fetch("/api/auth/me", { credentials: "same-origin", cache: "no-store" });
+    const data = await response.json();
+    discordAuthenticated = Boolean(data.authenticated);
+    document.getElementById("authUser").textContent = discordAuthenticated ? "مسجل: " + data.user.username : "غير مسجل الدخول";
+    document.getElementById("discordLogin").hidden = discordAuthenticated;
+    document.getElementById("discordLogout").hidden = !discordAuthenticated;
+    if (discordAuthenticated) keyInput.value = "";
+    return discordAuthenticated;
+  } catch (_error) { return false; }
+}
+
+document.getElementById("discordLogin").addEventListener("click", () => { location.href = "/auth/discord"; });
+document.getElementById("discordLogout").addEventListener("click", async () => {
+  await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
+  discordAuthenticated = false;
+  sessionStorage.removeItem(KEY_STORAGE);
+  keyInput.value = "";
+  location.reload();
+});
 keyInput.value = sessionStorage.getItem(KEY_STORAGE) || "";
 
 function updateStreamHelp() {
@@ -56,7 +79,7 @@ async function render() {
       remove.type = "button";
       remove.textContent = "حذف";
       remove.addEventListener("click", async () => {
-        if (!keyInput.value.trim()) return showMessage("أدخل مفتاح الإدارة أولاً.");
+        if (!keyInput.value.trim() && !discordAuthenticated) return showMessage("سجّل الدخول بديسكورد أو أدخل مفتاح الإدارة.");
         const response = await fetch("/api/content/" + encodeURIComponent(item.id), {
           method: "DELETE", headers: adminHeaders()
         });
@@ -263,7 +286,7 @@ async function loadSeasonOptions() {
 seriesSelect.addEventListener("change", loadSeasonOptions);
 document.getElementById("addSeason").addEventListener("click", async () => {
   const id = seriesSelect.value;
-  if (!id || !keyInput.value.trim()) return document.getElementById("seasonMessage").textContent = "اختر مسلسلاً وأدخل مفتاح الإدارة.";
+  if (!id || (!keyInput.value.trim() && !discordAuthenticated)) return document.getElementById("seasonMessage").textContent = "اختر مسلسلاً وسجّل الدخول بديسكورد.";
   const payload = { season_number: Number(document.getElementById("seasonNumber").value), title: document.getElementById("seasonTitle").value.trim() };
   const response = await fetch("/api/series/" + encodeURIComponent(id) + "/seasons", { method: "POST", headers: adminHeaders(), body: JSON.stringify(payload) });
   const data = await response.json().catch(() => ({}));
@@ -272,7 +295,7 @@ document.getElementById("addSeason").addEventListener("click", async () => {
 });
 document.getElementById("addEpisode").addEventListener("click", async () => {
   const id = episodeSeason.value;
-  if (!id || !keyInput.value.trim()) return document.getElementById("episodeMessage").textContent = "اختر موسماً وأدخل مفتاح الإدارة.";
+  if (!id || (!keyInput.value.trim() && !discordAuthenticated)) return document.getElementById("episodeMessage").textContent = "اختر موسماً وسجّل الدخول بديسكورد.";
   const payload = { episode_number: Number(document.getElementById("episodeNumber").value), title: document.getElementById("episodeTitle").value.trim(), stream: document.getElementById("episodeStream").value.trim() };
   const response = await fetch("/api/seasons/" + encodeURIComponent(id) + "/episodes", { method: "POST", headers: adminHeaders(), body: JSON.stringify(payload) });
   const data = await response.json().catch(() => ({}));
