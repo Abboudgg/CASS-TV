@@ -3,6 +3,9 @@ const path = require("path");
 const fs = require("fs");
 const { Pool } = require("pg");
 const crypto = require("crypto");
+const { Client, GatewayIntentBits } = require("discord.js");
+
+const discordClient = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 const app = express();
 
@@ -313,25 +316,36 @@ async function notifyDiscordNewContent(item) {
 }
 
 
-async function checkDiscordBot() {
+async function startDiscordBot() {
   const token = process.env.DISCORD_BOT_TOKEN || "";
   if (!token) {
     console.log("Discord bot: DISCORD_BOT_TOKEN is missing");
     return;
   }
+
+  discordClient.once("ready", () => {
+    console.log("Discord Gateway ready: " + discordClient.user.tag + " (" + discordClient.user.id + ")");
+  });
+  discordClient.on("error", error => {
+    console.error("Discord Gateway error:", error.message);
+  });
+  discordClient.on("shardDisconnect", (event, shardId) => {
+    console.warn("Discord Gateway disconnected. Shard:", shardId, "Code:", event.code);
+  });
+  discordClient.on("shardReconnecting", shardId => {
+    console.log("Discord Gateway reconnecting. Shard:", shardId);
+  });
+  discordClient.on("shardResume", (shardId, replayedEvents) => {
+    console.log("Discord Gateway resumed. Shard:", shardId, "Replayed events:", replayedEvents);
+  });
+  discordClient.on("invalidated", () => {
+    console.error("Discord Gateway session invalidated; bot cannot reconnect automatically.");
+  });
+
   try {
-    const response = await fetch("https://discord.com/api/v10/users/@me", {
-      headers: { Authorization: "Bot " + token },
-      signal: AbortSignal.timeout(8000)
-    });
-    if (!response.ok) {
-      console.error("Discord bot authentication failed:", response.status, (await response.text()).slice(0, 300));
-      return;
-    }
-    const bot = await response.json();
-    console.log("Discord bot connected:", bot.username + " (" + bot.id + ")");
+    await discordClient.login(token);
   } catch (error) {
-    console.error("Discord bot connection error:", error.message);
+    console.error("Discord Gateway login failed:", error.message);
   }
 }
 
@@ -1113,7 +1127,7 @@ app.get("/{*splat}", (_req, res) => {
 });
 
 async function start() {
-  await checkDiscordBot();
+  void startDiscordBot();
   if (pool) {
     try {
       await pool.query(
