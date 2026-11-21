@@ -142,6 +142,51 @@ app.get("/api/content", requireDatabase, async (_req, res) => {
   }
 });
 
+const DISCORD_CHANNEL_ID = "1573673448516100176";
+const DISCORD_ROLE_ID = "1573673168063701123";
+
+async function notifyDiscordNewContent(item) {
+  if (!process.env.DISCORD_BOT_TOKEN || !DISCORD_CHANNEL_ID || !DISCORD_ROLE_ID) {
+    console.log("Discord notification skipped: bot token is not configured");
+    return;
+  }
+  if (!["movie", "series"].includes(item.type)) return;
+
+  const kind = item.type === "movie" ? "فيلم جديد 🎬" : "مسلسل جديد 📺";
+  const safeTitle = String(item.title || "").replace(/@/g, "@\\u200b").slice(0, 150);
+  const message = [
+    "السلام عليكم 👋",
+    "",
+    "نزل " + kind + " في CASS TV!",
+    "**اسم العمل:** " + safeTitle,
+    "تابعوه الآن: https://casstv.onrender.com/",
+    "",
+    "<@&" + DISCORD_ROLE_ID + ">"
+  ].join("\\n");
+
+  try {
+    const response = await fetch("https://discord.com/api/v10/channels/" + DISCORD_CHANNEL_ID + "/messages", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bot " + process.env.DISCORD_BOT_TOKEN,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        content: message,
+        allowed_mentions: { parse: [], roles: [DISCORD_ROLE_ID] }
+      }),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!response.ok) {
+      console.error("Discord notification failed:", response.status, (await response.text()).slice(0, 500));
+    } else {
+      console.log("Discord notification sent for content:", item.id);
+    }
+  } catch (error) {
+    console.error("Discord notification error:", error.message);
+  }
+}
+
 app.post("/api/content", requireDatabase, requireAdmin, async (req, res) => {
   const { type, title, poster = "", stream = "", teaser_url = "", description = "", category = "عام" } = req.body || {};
   if (!["movie", "series", "live"].includes(type) || typeof title !== "string" || !title.trim() || typeof category !== "string" || !category.trim() || category.trim().length > 60) {
@@ -158,6 +203,7 @@ app.post("/api/content", requireDatabase, requireAdmin, async (req, res) => {
       "INSERT INTO content (type, title, poster, stream, teaser_url, description, category) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, type, title, poster, stream, teaser_url, description, category, created_at",
       [type, title.trim().slice(0, 100), String(poster).slice(0, 1000), String(stream).slice(0, 2000), String(teaser_url).slice(0, 2000), String(description).slice(0, 500), category.trim().slice(0, 60)]
     );
+    await notifyDiscordNewContent(result.rows[0]);
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error("Content insert failed:", error.message);
