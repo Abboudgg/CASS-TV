@@ -26,6 +26,10 @@ const pool = process.env.DATABASE_URL
   : null;
 
 app.use(express.json({ limit: "1mb" }));
+app.use((req, res, next) => {
+  if (req.path === "/admin.html") return res.redirect(302, "/admin");
+  next();
+});
 app.use(express.static(path.join(__dirname, "public")));
 
 function parseCookies(req) {
