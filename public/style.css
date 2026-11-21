@@ -87,3 +87,9 @@ footer { display: flex; justify-content: space-between; padding: 25px 10%; color
 .media-player-dialog video { display: block; width: 100%; max-height: 70vh; background: #000; border-radius: 10px; }
 .player-close { display: block; margin-right: auto; border: 1px solid #ffffff30; border-radius: 8px; padding: 8px 12px; background: transparent; color: white; font: inherit; cursor: pointer; }
 @media (max-width: 480px) { .media-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; } .media-info { padding: 10px; } }
+
+.series-dialog{max-height:85vh;overflow:auto}
+.series-season{padding:14px 0;border-top:1px solid #ffffff20}
+.series-season h4{margin:0 0 12px}
+.episode-play{display:block;width:100%;margin:8px 0;padding:12px;border:1px solid #ffffff20;border-radius:9px;background:#242236;color:#fff;text-align:right;font:inherit;cursor:pointer}
+.episode-play:hover{background:#34245b}
