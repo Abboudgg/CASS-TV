@@ -278,3 +278,83 @@ document.getElementById("addEpisode").addEventListener("click", async () => {
 
 
 loadSeriesManager();
+
+
+// Community series and movie suggestions
+async function renderSeriesSubmissions() {
+  const target = document.getElementById("seriesSubmissionList");
+  if (!target) return;
+  if (!keyInput.value.trim()) {
+    target.textContent = "أدخل مفتاح الإدارة أعلاه لعرض الاقتراحات.";
+    return;
+  }
+  try {
+    const response = await fetch("/api/admin/series-submissions", { headers: adminHeaders(), cache: "no-store" });
+    const data = await response.json().catch(() => []);
+    if (!response.ok) throw new Error(data.error || "تعذر تحميل الاقتراحات.");
+    target.replaceChildren();
+    if (!data.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = "لا توجد اقتراحات حتى الآن.";
+      target.append(empty);
+      return;
+    }
+    const labels = { new: "جديد", reviewing: "قيد المراجعة", approved: "مقبول", rejected: "مرفوض" };
+    data.forEach(item => {
+      const row = document.createElement("article");
+      row.className = "entry suggestion-entry";
+      const details = document.createElement("div");
+      const title = document.createElement("h3");
+      title.textContent = item.title + " · " + item.category;
+      const meta = document.createElement("p");
+      meta.textContent = "رقم الطلب: " + item.request_code + " · " + labels[item.status] + " · " + new Date(item.created_at).toLocaleString("ar-SA");
+      const sender = document.createElement("p");
+      sender.textContent = "المرسل: " + (item.submitter_name || "غير محدد") + " · البريد: " + (item.contact_email || "غير مضاف");
+      const description = document.createElement("p");
+      description.textContent = item.details || "لا توجد تفاصيل إضافية.";
+      details.append(title, meta, sender, description);
+      if (item.poster_url) {
+        const poster = document.createElement("a");
+        poster.href = item.poster_url;
+        poster.target = "_blank";
+        poster.rel = "noopener noreferrer";
+        poster.textContent = "فتح صورة الغلاف";
+        details.append(poster);
+      }
+      const actions = document.createElement("div");
+      actions.className = "suggestion-actions";
+      const select = document.createElement("select");
+      select.setAttribute("aria-label", "حالة الاقتراح");
+      [["new","جديد"],["reviewing","قيد المراجعة"],["approved","مقبول"],["rejected","مرفوض"]].forEach(([value,label]) => {
+        const option = new Option(label, value);
+        select.add(option);
+      });
+      select.value = item.status;
+      const save = document.createElement("button");
+      save.type = "button";
+      save.textContent = "حفظ الحالة";
+      save.addEventListener("click", async () => {
+        save.disabled = true;
+        try {
+          const result = await fetch("/api/admin/series-submissions/" + item.id, {
+            method: "PATCH", headers: adminHeaders(), body: JSON.stringify({ status: select.value })
+          });
+          const body = await result.json().catch(() => ({}));
+          if (!result.ok) throw new Error(body.error || "تعذر تحديث الحالة.");
+          await renderSeriesSubmissions();
+        } catch (error) { alert(error.message); save.disabled = false; }
+      });
+      const mailState = document.createElement("small");
+      mailState.textContent = item.email_sent ? "تم إرسال إشعار البريد" : "إشعار البريد غير مرسل";
+      actions.append(select, save, mailState);
+      row.append(details, actions);
+      target.append(row);
+    });
+  } catch (error) {
+    target.textContent = error.message;
+  }
+}
+document.getElementById("refreshSeriesSubmissions")?.addEventListener("click", renderSeriesSubmissions);
+keyInput.addEventListener("change", renderSeriesSubmissions);
+renderSeriesSubmissions();
