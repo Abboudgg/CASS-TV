@@ -31,8 +31,6 @@ if (catalog && originalGrid) {
   catalog.append(moviesSection, seriesSection);
 
   const playerDialog = document.createElement("dialog");
-  let currentPlaylist = [];
-  let currentPlaylistIndex = -1;
   playerDialog.className = "media-player-dialog";
   const playerClose = document.createElement("button");
   playerClose.type = "button";
@@ -152,111 +150,26 @@ if (catalog && originalGrid) {
       info.append(description);
     }
 
-    const streamUrl = safeHttpUrl(item.stream);
-    const play = document.createElement("button");
-    play.type = "button";
-    play.className = "media-play";
-    play.textContent = item.type === "series" ? "▶ قائمة تشغيل الحلقات" : "▶ تشغيل";
-    play.disabled = item.type !== "series" && !streamUrl;
-    play.addEventListener("click", async () => {
-      if (item.type !== "series") {
+    if (item.type !== "series") {
+      const streamUrl = safeHttpUrl(item.stream);
+      const play = document.createElement("button");
+      play.type = "button";
+      play.className = "media-play";
+      play.textContent = "▶ تشغيل";
+      play.disabled = !streamUrl;
+      play.addEventListener("click", () => {
         if (!streamUrl) return;
-        currentPlaylist = [];
-        currentPlaylistIndex = -1;
         playerTitle.textContent = item.title || "CASS TV";
         video.src = streamUrl;
         if (typeof playerDialog.showModal === "function") playerDialog.showModal();
         else playerDialog.setAttribute("open", "");
         video.play().catch(() => {});
-        return;
-      }
-
-      play.disabled = true;
-      play.textContent = "جارٍ تحميل قائمة التشغيل...";
-      try {
-        const response = await fetch("/api/series/" + encodeURIComponent(item.id) + "/seasons", { cache: "no-store" });
-        const seasons = await response.json();
-        if (!response.ok) throw new Error(seasons.error || "تعذر تحميل حلقات المسلسل.");
-
-        const episodes = seasons.flatMap(season =>
-          (Array.isArray(season.episodes) ? season.episodes : []).map(episode => ({
-            ...episode,
-            season_number: season.season_number
-          }))
-        );
-
-        const dialog = document.createElement("dialog");
-        dialog.className = "media-player-dialog series-dialog";
-        const close = document.createElement("button");
-        close.type = "button";
-        close.className = "player-close";
-        close.textContent = "إغلاق ✕";
-        close.addEventListener("click", () => dialog.close());
-
-        const heading = document.createElement("h3");
-        heading.textContent = "قائمة تشغيل · " + item.title;
-        dialog.append(close, heading);
-
-        if (!episodes.length) {
-          const empty = document.createElement("p");
-          empty.className = "catalog-empty";
-          empty.textContent = "لم تتم إضافة حلقات لهذا المسلسل بعد.";
-          dialog.append(empty);
-        } else {
-          const list = document.createElement("div");
-          list.className = "series-playlist";
-          episodes.forEach((episode, index) => {
-            const button = document.createElement("button");
-            button.type = "button";
-            button.className = "episode-play";
-            button.textContent = "▶ الموسم " + episode.season_number +
-              " · الحلقة " + episode.episode_number + " · " + episode.title;
-            button.addEventListener("click", () => {
-              currentPlaylist = episodes;
-              currentPlaylistIndex = index;
-              dialog.close();
-              playPlaylistEpisode(item);
-            });
-            list.append(button);
-          });
-          dialog.append(list);
-        }
-
-        document.body.append(dialog);
-        dialog.addEventListener("close", () => dialog.remove(), { once: true });
-        if (typeof dialog.showModal === "function") dialog.showModal();
-        else dialog.setAttribute("open", "");
-      } catch (error) {
-        alert(error.message);
-      } finally {
-        play.disabled = false;
-        play.textContent = "▶ قائمة تشغيل الحلقات";
-      }
-    });
-    info.append(play);
+      });
+      info.append(play);
+    }
     card.append(info);
     return card;
   }
-
-  function playPlaylistEpisode(seriesItem) {
-    const episode = currentPlaylist[currentPlaylistIndex];
-    if (!episode) return;
-    playerTitle.textContent = seriesItem.title + " · الموسم " +
-      episode.season_number + " · الحلقة " + episode.episode_number + " · " + episode.title;
-    video.src = safeHttpUrl(episode.stream);
-    if (typeof playerDialog.showModal === "function" && !playerDialog.open) playerDialog.showModal();
-    else if (!playerDialog.open) playerDialog.setAttribute("open", "");
-    video.play().catch(() => {});
-  }
-
-  video.addEventListener("ended", () => {
-    if (currentPlaylistIndex < 0 || currentPlaylistIndex >= currentPlaylist.length - 1) return;
-    currentPlaylistIndex += 1;
-    const episode = currentPlaylist[currentPlaylistIndex];
-    playerTitle.textContent = "الحلقة التالية · " + episode.title;
-    video.src = safeHttpUrl(episode.stream);
-    video.play().catch(() => {});
-  });
 
   async function loadCatalog() {
     try {
