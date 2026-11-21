@@ -166,6 +166,61 @@ app.delete("/api/content/:id", requireDatabase, requireAdmin, async (req, res) =
 });
 
 
+
+// Series seasons and episodes API
+app.get("/api/series/:id/seasons", requireDatabase, async (req, res) => {
+  if (!/^\d+$/.test(req.params.id)) return res.status(400).json({ error: "معرّف المسلسل غير صالح." });
+  try {
+    const series = await pool.query("SELECT id FROM content WHERE id = $1 AND type = 'series'", [req.params.id]);
+    if (!series.rowCount) return res.status(404).json({ error: "المسلسل غير موجود." });
+    const result = await pool.query(
+      "SELECT s.id, s.season_number, s.title, s.created_at, COALESCE(json_agg(json_build_object('id', e.id, 'episode_number', e.episode_number, 'title', e.title, 'stream', e.stream, 'created_at', e.created_at) ORDER BY e.episode_number) FILTER (WHERE e.id IS NOT NULL), '[]'::json) AS episodes FROM series_seasons s LEFT JOIN series_episodes e ON e.season_id = s.id WHERE s.series_id = $1 GROUP BY s.id ORDER BY s.season_number",
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Series seasons read failed:", error.message);
+    res.status(500).json({ error: "تعذر تحميل المواسم والحلقات." });
+  }
+});
+app.post("/api/series/:id/seasons", requireDatabase, requireAdmin, async (req, res) => {
+  if (!/^\d+$/.test(req.params.id)) return res.status(400).json({ error: "معرّف المسلسل غير صالح." });
+  const number = Number(req.body?.season_number);
+  const title = typeof req.body?.title === "string" ? req.body.title.trim() : "";
+  if (!Number.isSafeInteger(number) || number < 1 || number > 100 || !title || title.length > 100)
+    return res.status(400).json({ error: "أدخل رقم موسم صحيحاً واسماً لا يتجاوز 100 حرف." });
+  try {
+    const series = await pool.query("SELECT id FROM content WHERE id = $1 AND type = 'series'", [req.params.id]);
+    if (!series.rowCount) return res.status(404).json({ error: "المسلسل غير موجود." });
+    const result = await pool.query("INSERT INTO series_seasons (series_id, season_number, title) VALUES ($1, $2, $3) RETURNING id, series_id, season_number, title", [req.params.id, number, title]);
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    if (error.code === "23505") return res.status(409).json({ error: "رقم الموسم موجود لهذا المسلسل بالفعل." });
+    console.error("Season insert failed:", error.message);
+    res.status(500).json({ error: "تعذرت إضافة الموسم." });
+  }
+});
+app.post("/api/seasons/:id/episodes", requireDatabase, requireAdmin, async (req, res) => {
+  if (!/^\d+$/.test(req.params.id)) return res.status(400).json({ error: "معرّف الموسم غير صالح." });
+  const number = Number(req.body?.episode_number);
+  const title = typeof req.body?.title === "string" ? req.body.title.trim() : "";
+  const stream = typeof req.body?.stream === "string" ? req.body.stream.trim() : "";
+  if (!Number.isSafeInteger(number) || number < 1 || number > 10000 || !title || title.length > 120)
+    return res.status(400).json({ error: "أدخل رقم حلقة صحيحاً واسماً لا يتجاوز 120 حرفاً." });
+  if (!/^https?:\/\//i.test(stream) || !/\.mp4(?:$|[?#])/i.test(stream))
+    return res.status(400).json({ error: "رابط الحلقة يجب أن يكون MP4 مباشراً." });
+  try {
+    const season = await pool.query("SELECT id FROM series_seasons WHERE id = $1", [req.params.id]);
+    if (!season.rowCount) return res.status(404).json({ error: "الموسم غير موجود." });
+    const result = await pool.query("INSERT INTO series_episodes (season_id, episode_number, title, stream) VALUES ($1, $2, $3, $4) RETURNING id, season_id, episode_number, title, stream", [req.params.id, number, title, stream.slice(0, 2000)]);
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    if (error.code === "23505") return res.status(409).json({ error: "رقم الحلقة موجود في هذا الموسم بالفعل." });
+    console.error("Episode insert failed:", error.message);
+    res.status(500).json({ error: "تعذرت إضافة الحلقة." });
+  }
+});
+
 app.post("/api/register", requireDatabase, async (req, res) => {
   const { username, password } = req.body || {};
   if (typeof username !== "string" || !/^[a-zA-Z0-9_.-]{3,32}$/.test(username))
@@ -392,10 +447,32 @@ app.get("/player_api.php", requireDatabase, async (req, res) => {
           movie_data: { stream_id: Number(item.id), name: item.title, title: item.title, container_extension: "mp4", added: Math.floor(new Date(item.created_at).getTime() / 1000) }
         });
       }
+      const seasonResult = await pool.query(
+        "SELECT s.id, s.season_number, s.title, e.id AS episode_id, e.episode_number, e.title AS episode_title, e.stream FROM series_seasons s LEFT JOIN series_episodes e ON e.season_id = s.id WHERE s.series_id = $1 ORDER BY s.season_number, e.episode_number",
+        [id]
+      );
+      const episodes = {};
+      const seasons = [];
+      for (const row of seasonResult.rows) {
+        const seasonKey = String(row.season_number);
+        if (!episodes[seasonKey]) {
+          episodes[seasonKey] = [];
+          seasons.push({ air_date: "", episode_count: 0, id: Number(row.id), name: row.title, overview: "", season_number: Number(row.season_number), cover: "" });
+        }
+        if (row.episode_id) {
+          episodes[seasonKey].push({
+            id: Number(row.episode_id), episode_num: Number(row.episode_number),
+            title: row.episode_title, container_extension: "mp4",
+            info: { movie_image: "", plot: "", duration_secs: 0 },
+            custom_sid: "", added: Math.floor(Date.now() / 1000),
+            direct_source: row.stream
+          });
+          seasons[seasons.length - 1].episode_count++;
+        }
+      }
       return res.json({
         info: { cover: item.poster || "", plot: item.description || "", name: item.title, releaseDate: "" },
-        episodes: {},
-        seasons: []
+        episodes, seasons
       });
     }
     return res.status(400).json({ error: "إجراء Xtream Codes غير مدعوم." });
@@ -691,6 +768,8 @@ async function start() {
       await pool.query(
         "CREATE TABLE IF NOT EXISTS content (id BIGSERIAL PRIMARY KEY, type VARCHAR(10) NOT NULL CHECK (type IN ('movie', 'series')), title VARCHAR(100) NOT NULL, poster TEXT NOT NULL DEFAULT '', stream TEXT NOT NULL DEFAULT '', description VARCHAR(500) NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"
       );
+      await pool.query("CREATE TABLE IF NOT EXISTS series_seasons (id BIGSERIAL PRIMARY KEY, series_id BIGINT NOT NULL REFERENCES content(id) ON DELETE CASCADE, season_number INTEGER NOT NULL CHECK (season_number > 0), title VARCHAR(100) NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(series_id, season_number))");
+      await pool.query("CREATE TABLE IF NOT EXISTS series_episodes (id BIGSERIAL PRIMARY KEY, season_id BIGINT NOT NULL REFERENCES series_seasons(id) ON DELETE CASCADE, episode_number INTEGER NOT NULL CHECK (episode_number > 0), title VARCHAR(120) NOT NULL, stream TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(season_id, episode_number))");
       await pool.query("ALTER TABLE content DROP CONSTRAINT IF EXISTS content_type_check");
       await pool.query("ALTER TABLE content ADD CONSTRAINT content_type_check CHECK (type IN ('movie', 'series', 'live'))");
       await pool.query(
