@@ -137,3 +137,46 @@ h1 span { color: #e5a2b8; }
 .track-form input { flex:1; min-width:180px; border:1px solid #d98aa544; border-radius:10px; padding:12px; color:#fff7fa; background:#210711; font:inherit; }
 .track-form button { border:0; border-radius:10px; padding:12px 20px; color:white; background:var(--accent); font:inherit; cursor:pointer; }
 .track-result { margin-top:14px; color:#f2c4d3; line-height:1.8; overflow-wrap:anywhere; }
+
+
+/* Movie trailers at the top of the home page */
+.teaser-section {
+  padding-top: 48px;
+  padding-bottom: 54px;
+  background: linear-gradient(180deg, #35101d 0%, #240711 100%);
+}
+.teaser-section .section-heading { margin-bottom: 22px; }
+.teaser-section .section-heading p { color: var(--muted); margin: 8px 0 0; }
+.teaser-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 20px;
+}
+.teaser-card {
+  overflow: hidden;
+  border: 1px solid #ffffff18;
+  border-radius: 16px;
+  background: #35101d;
+  box-shadow: 0 12px 30px #0003;
+}
+.teaser-card > img, .teaser-poster-empty {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  background: #4a071b;
+}
+.teaser-poster-empty {
+  display: grid;
+  place-items: center;
+  font-size: 52px;
+}
+.teaser-info { padding: 14px; display: grid; gap: 9px; }
+.teaser-info h3 { margin: 0; font-size: 17px; }
+.teaser-info small { color: var(--muted); }
+.teaser-info .media-play { width: 100%; }
+@media (max-width: 600px) {
+  .teaser-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .teaser-info { padding: 10px; }
+  .teaser-info h3 { font-size: 14px; }
+}
